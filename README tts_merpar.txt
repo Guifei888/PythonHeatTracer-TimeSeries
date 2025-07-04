@@ -1,72 +1,92 @@
-# TTS_MERPAR - Temperature Time Series Merger and Processor
+================================================================================
+Temperature Time-Series Merger and Processor (tts_merpar_alpha.py)
+================================================================================
 
-A Python application for processing, merging, and analyzing temperature data from shallow and deep water temperature loggers with interactive data selection and export capabilities.
+Version: 2.0 - Enhanced with Adaptive Zoom and Improved User Interface
 
-## Overview
+Author: Timothy Wu
+Created: 6/26/2025
+Last Updated: 7/3/2025
 
-TTS_MERPAR processes temperature time series data by:
-- Reading CSV files from temperature loggers
-- Converting data to water year format (October 1 - September 30)
-- Merging shallow and deep temperature datasets
-- Providing interactive visualization for data interval selection
-- Exporting selected intervals in multiple formats (CSV, WYO)
+This tool processes temperature data from shallow and deep water temperature loggers,
+merges them based on water day calculations, and provides an interactive interface
+for selecting and exporting data intervals with advanced visualization features.
 
-## Requirements
+================================================================================
+INSTALLATION REQUIREMENTS
+================================================================================
 
-### Python Version
-- Python 3.7 or higher
+1. PYTHON VERSION
+   - Python 3.7 or higher (recommended: Python 3.9+)
+   - Download from: https://www.python.org/downloads/
 
-### Required Python Packages
-```bash
-pip install pandas numpy matplotlib
-```
+2. REQUIRED LIBRARIES
+   Install using pip (copy and paste the commands below):
 
-Or install all at once:
-```bash
-pip install pandas numpy matplotlib
-```
-
-### System Requirements
-- Operating System: Windows, macOS, or Linux
-- Memory: At least 4GB RAM recommended for large datasets
-- Display: GUI support required for interactive plotting
-
-## Installation
-
-1. **Download the script**
-   ```bash
-   # Download tts_merpar_alpha.py to your working directory
-   ```
-
-2. **Install dependencies**
-   ```bash
+   # Core libraries (REQUIRED)
    pip install pandas numpy matplotlib
-   ```
 
-3. **Verify installation**
-   ```bash
-   python -c "import pandas, numpy, matplotlib; print('All dependencies installed successfully')"
-   ```
+   # If you get errors, try installing with specific versions:
+   pip install pandas==2.0.3 numpy==1.24.3 matplotlib==3.7.2
 
-## File Structure
+3. INSTALLATION COMMANDS (All at once)
+   
+   For Windows (Command Prompt or PowerShell):
+   pip install pandas numpy matplotlib
 
-Your working directory should contain:
-```
-your_project_folder/
-├── tts_merpar_alpha.py          # Main script
-├── tts_merpar.par               # Parameter file (required)
-├── your_shallow_data.csv        # Shallow temperature data
-├── your_deep_data.csv           # Deep temperature data
-└── processed/                   # Output folder (created automatically)
-```
+   For macOS/Linux (Terminal):
+   pip3 install pandas numpy matplotlib
 
-## Configuration
+   For Anaconda users:
+   conda install pandas numpy matplotlib
 
-### Parameter File (tts_merpar.par)
+4. VERIFY INSTALLATION
+   Open Python and run:
+   import pandas, numpy, matplotlib
+   print("All libraries installed successfully!")
 
-Create a parameter file named `tts_merpar.par` in the same directory as the script:
+================================================================================
+QUICK START GUIDE
+================================================================================
 
-```ini
+1. PREPARE YOUR DATA
+   - Ensure you have two CSV files: shallow and deep temperature logger data
+   - Files should contain date/time and temperature columns
+   - Example format:
+     ID,DateTime,Temperature
+     1,10/01/23 12:00:00 AM,15.25
+     2,10/01/23 12:15:00 AM,15.30
+     ...
+
+2. CONFIGURE PARAMETERS
+   - Create tts_merpar.par file (see PARAMETER FILE section below)
+   - Set input filenames, water year, and processing options
+
+3. RUN THE APPLICATION
+   - Double-click tts_merpar_alpha.py OR
+   - Open command prompt/terminal in the script folder and run:
+     python tts_merpar_alpha.py
+   
+4. INTERACTIVE WORKFLOW
+   - View merged temperature data in interactive plot
+   - Use zoom/pan tools for detailed inspection
+   - Click and drag to select data intervals
+   - Edit selection bounds using text boxes
+   - Save selected intervals as CSV and WYO files
+
+5. COMPLETION
+   - Click "Done" to create full-record files
+   - All output saved to configured folder with comprehensive logging
+
+================================================================================
+PARAMETER FILE CONFIGURATION (tts_merpar.par)
+================================================================================
+
+The parameter file allows you to set processing options and file locations.
+Create a file named "tts_merpar.par" in the same folder as tts_merpar_alpha.py.
+
+EXAMPLE PARAMETER FILE:
+-----------------------
 # TTS_MERPAR Parameter File
 # Lines starting with # or ; are comments
 
@@ -83,270 +103,544 @@ convert_f_to_c = 0              # 1 to convert Fahrenheit to Celsius, 0 to keep 
 gap_threshold_factor = 1.5      # Factor for detecting data gaps
 output_folder = processed       # Output directory name
 plot_relative = 0               # 1 for relative plotting, 0 for absolute water days
-```
 
-### Parameter Descriptions
+PARAMETER DESCRIPTIONS:
+-----------------------
+- filename_shallow: Filename of shallow temperature data CSV (REQUIRED)
+- filename_deep: Filename of deep temperature data CSV (REQUIRED)
+- water_year: Water year for analysis (Oct 1 to Sep 30) (REQUIRED)
+- data_interval_min: Expected data logging interval in minutes (REQUIRED)
+- convert_f_to_c: Convert Fahrenheit to Celsius (1=yes, 0=no, default=0)
+- gap_threshold_factor: Multiplier for gap detection threshold (default=1.5)
+- output_folder: Output directory name (default=processed)
+- plot_relative: Use relative water day plotting (1=yes, 0=no, default=0)
 
-| Parameter | Required | Description | Example |
-|-----------|----------|-------------|---------|
-| `filename_shallow` | Yes | Filename of shallow temperature data CSV | `temp_shallow.csv` |
-| `filename_deep` | Yes | Filename of deep temperature data CSV | `temp_deep.csv` |
-| `water_year` | Yes | Water year for analysis (Oct 1 to Sep 30) | `2024` |
-| `data_interval_min` | Yes | Expected data logging interval in minutes | `15.0` |
-| `convert_f_to_c` | No | Convert Fahrenheit to Celsius (1=yes, 0=no) | `0` |
-| `gap_threshold_factor` | No | Multiplier for gap detection threshold | `1.5` |
-| `output_folder` | No | Output directory name | `processed` |
-| `plot_relative` | No | Use relative water day plotting (1=yes, 0=no) | `0` |
+================================================================================
+INPUT DATA FORMAT REQUIREMENTS
+================================================================================
 
-## Input Data Format
-
-### CSV File Requirements
-
+CSV FILE STRUCTURE:
 Your temperature data CSV files must contain at least 3 columns:
-1. **Column 1**: Record number or ID (ignored)
-2. **Column 2**: Date/time string
-3. **Column 3**: Temperature value
+1. Column 1: Record number or ID (can be any value, will be ignored)
+2. Column 2: Date/time string (see supported formats below)
+3. Column 3: Temperature value (numeric)
 
-### Supported Date/Time Formats
+SUPPORTED DATE/TIME FORMATS:
+The script automatically detects and parses these datetime formats:
+- MM/DD/YY HH:MM:SS AM/PM (e.g., 12/25/23 2:30:45 PM)
+- MM/DD/YY HH:MM:SS (e.g., 12/25/23 14:30:45)
+- MM/DD/YYYY HH:MM:SS AM/PM (e.g., 12/25/2023 2:30:45 PM)
+- MM/DD/YYYY HH:MM:SS (e.g., 12/25/2023 14:30:45)
+- YYYY-MM-DD HH:MM:SS (e.g., 2023-12-25 14:30:45)
+- MM/DD/YY HH:MM (e.g., 12/25/23 14:30)
+- MM/DD/YYYY HH:MM (e.g., 12/25/2023 14:30)
 
-The script automatically detects these datetime formats:
-- `MM/DD/YY HH:MM:SS AM/PM` (e.g., `12/25/23 2:30:45 PM`)
-- `MM/DD/YY HH:MM:SS` (e.g., `12/25/23 14:30:45`)
-- `MM/DD/YYYY HH:MM:SS AM/PM` (e.g., `12/25/2023 2:30:45 PM`)
-- `MM/DD/YYYY HH:MM:SS` (e.g., `12/25/2023 14:30:45`)
-- `YYYY-MM-DD HH:MM:SS` (e.g., `2023-12-25 14:30:45`)
-- `MM/DD/YY HH:MM` (e.g., `12/25/23 14:30`)
-- `MM/DD/YYYY HH:MM` (e.g., `12/25/2023 14:30`)
-
-### Example CSV Format
-```csv
+EXAMPLE CSV FORMAT:
 ID,DateTime,Temperature
 1,10/01/23 12:00:00 AM,15.25
 2,10/01/23 12:15:00 AM,15.30
 3,10/01/23 12:30:00 AM,15.28
+4,10/01/23 12:45:00 AM,15.32
 ...
-```
 
-## Usage
+================================================================================
+DETAILED USAGE GUIDE
+================================================================================
 
-### Basic Usage
+1. SCRIPT STARTUP
+   The script performs these operations automatically:
+   - Loads parameters from tts_merpar.par
+   - Validates required parameters and files
+   - Creates output directory if needed
+   - Sets up comprehensive logging
 
-1. **Prepare your files**
-   - Place CSV data files in the working directory
-   - Create `tts_merpar.par` parameter file
-   - Ensure the script `tts_merpar_alpha.py` is in the same directory
+2. DATA LOADING PHASE
+   - Reads shallow and deep temperature CSV files
+   - Detects and validates date/time formats
+   - Reports parsing success and any errors
+   - Identifies data gaps based on expected interval
 
-2. **Run the script**
-   ```bash
-   python tts_merpar_alpha.py
-   ```
+   Enhanced Debug Output:
+   "Debug: Showing first 10 date strings to verify format detection..."
+   "✓ Successfully parsed using format: %m/%d/%y %I:%M:%S %p"
+   "✓ All displayed date strings were successfully parsed and included"
 
-3. **Interactive selection**
-   - The script will display an interactive plot
-   - Click and drag to select data intervals
-   - Use the control buttons to save intervals
-   - Click "Done" when finished
+3. WATER YEAR PROCESSING
+   - Converts datetime to water day format (Oct 1 = Day 0)
+   - Handles leap years automatically (366 vs 365 days)
+   - Validates data falls within specified water year
+   - Reports any pre-season or post-season data
 
-### Step-by-Step Workflow
+4. DATA MERGING
+   - Aligns shallow and deep datasets by water day
+   - Uses nearest-neighbor matching for timestamp alignment
+   - Reports merged dataset statistics
+   - Identifies any anomalous data
 
-1. **Script starts and loads parameters**
-   ```
-   === TTS_MERPAR: Temperature Time Series Merger and Processor ===
-   Loading parameters from: /path/to/tts_merpar.par
-   ```
+5. INTERACTIVE VISUALIZATION
+   Enhanced Features (v2.0):
+   - Adaptive zoom-responsive axis ticks
+   - Decimal water day precision when zoomed in
+   - Smart temperature axis formatting (even degrees)
+   - Real-time selection bound editing
+   - Improved visual feedback
 
-2. **Data loading and validation**
-   ```
-   === Reading Data Files ===
-   Reading Shallow data from: shallow_temp_data.csv
-   Reading Deep data from: deep_temp_data.csv
-   ```
+6. DATA SELECTION METHODS
+   Method 1 - Graphical Selection:
+   - Click and drag on plot to select interval
+   - Visual rectangle shows selection bounds
+   - Automatic text box updates
 
-3. **Water year processing**
-   ```
-   === Processing Water Years ===
-   === Merging Data ===
-   Merged dataset: 35040 records
-   ```
+   Method 2 - Precise Text Entry:
+   - Edit Start WD and End WD values directly
+   - Selection rectangle updates in real-time
+   - Fine-tune bounds with decimal precision
 
-4. **Interactive plot appears**
-   - Temperature data plotted vs. water day
-   - Water year boundaries marked
-   - Control panel at bottom
+7. FILE EXPORT
+   - User controls exact filenames (no automatic suffixes)
+   - Creates three files per interval: CSV, shallow WYO, deep WYO
+   - Maintains comprehensive processing history
 
-5. **Data selection**
-   - Click and drag on plot to select intervals
-   - Adjust values in text boxes if needed
-   - Click "Save" to export interval
-   - Repeat for multiple intervals
+================================================================================
+INTERACTIVE CONTROLS AND FEATURES
+================================================================================
 
-6. **Completion**
-   - Click "Done" to create full-record files
-   - All files saved to output directory
+PLOT INTERACTION:
+- Click and drag: Select data interval on the plot
+- Zoom: Use matplotlib toolbar for detailed inspection
+- Pan: Navigate through large datasets
+- Adaptive ticks: Automatic adjustment based on zoom level
 
-## Interactive Controls
+ZOOM-RESPONSIVE FEATURES:
+- Time axis shows decimal water days when zoomed (0.1, 0.2, 0.5 day intervals)
+- Temperature axis adjusts precision (0.1°C when zoomed, 2°C for overview)
+- Grid lines adapt to zoom level for optimal readability
+- Water year boundaries remain visible at all zoom levels
 
-### Plot Interaction
-- **Click and drag**: Select data interval on the plot
-- **Zoom**: Use matplotlib toolbar for zooming/panning
-- **Legend**: Toggle data series visibility
+CONTROL PANEL:
+- Start WD: Start water day for selection (editable)
+- End WD: End water day for selection (editable)
+- Filename: Base filename for output files (full user control)
+- Save: Export current selection with chosen filename
+- Clear: Remove all selection rectangles from plot
+- Done: Finish processing and create full-record files
 
-### Control Panel
-- **Start WD**: Start water day for selection
-- **End WD**: End water day for selection  
-- **Filename**: Base filename for output files
-- **Save**: Export current selection
-- **Clear**: Remove all selection rectangles
-- **Done**: Finish processing and create full files
+TEXT BOX ENHANCEMENTS:
+- Real-time rectangle updates when editing values
+- Click to position cursor and edit
+- Standard matplotlib text editing (character-by-character)
+- Immediate visual feedback for bound changes
 
-## Output Files
+================================================================================
+OUTPUT FILES AND FORMATS
+================================================================================
 
-The script creates several output files in the specified output directory:
+DIRECTORY STRUCTURE:
+your_project_folder/
+├── tts_merpar_alpha.py
+├── tts_merpar.par
+├── shallow_data.csv
+├── deep_data.csv
+└── processed/                  ← Output folder (configurable)
+    ├── interval_files.csv
+    ├── interval_files-S.wyo
+    ├── interval_files-D.wyo
+    ├── basename_full.csv
+    ├── basename-S_full.wyo
+    ├── basename-D_full.wyo
+    └── basename_timestamp.log
 
-### For Each Selected Interval
-- `{filename}_int01.csv` - Composite CSV with both temperatures
-- `{filename}-S_int01.wyo` - Shallow temperature in WYO format
-- `{filename}-D_int01.wyo` - Deep temperature in WYO format
+FOR EACH SELECTED INTERVAL:
+- {user_filename}.csv - Composite CSV with both temperatures
+- {user_filename}-S.wyo - Shallow temperature in WYO format
+- {user_filename}-D.wyo - Deep temperature in WYO format
 
-### Full Dataset Files
-- `{filename}_full.csv` - Complete merged dataset
-- `{filename}-S_full.wyo` - Complete shallow temperature data
-- `{filename}-D_full.wyo` - Complete deep temperature data
+FULL DATASET FILES (created when clicking "Done"):
+- {basename}_full.csv - Complete merged dataset
+- {basename}-S_full.wyo - Complete shallow temperature data
+- {basename}-D_full.wyo - Complete deep temperature data
 
-### Log File
-- `{filename}_{timestamp}.log` - Processing log with all console output
+LOG FILE:
+- {basename}_{timestamp}.log - Complete processing log with all console output
 
-### File Format Details
+FILE FORMAT SPECIFICATIONS:
 
-**CSV Format**:
-```csv
+CSV Format (Specification Compliant):
 WaterDay,Shallow.Temp,Deep.Temp
 0.000000,15.25000,14.82000
 0.010417,15.30000,14.85000
-```
+0.020833,15.28000,14.80000
+...
 
-**WYO Format**:
-```
+WYO Format (Water Year Output):
 # Year	WaterDay	Temperature	DepthID
 2023	0.00000	15.25000	1
 2023	0.01042	15.30000	1
-```
+2023	0.02083	15.28000	1
+...
 
-## Water Year Concepts
+================================================================================
+WATER YEAR CONCEPTS AND CALCULATIONS
+================================================================================
 
-### Water Year Definition
-- **Water Year 2024**: October 1, 2023 to September 30, 2024
-- **Water Day 0**: October 1 (start of water year)
-- **Water Day 365/366**: September 30 (end of water year)
+WATER YEAR DEFINITION:
+- Water Year 2024: October 1, 2023 to September 30, 2024
+- Water Day 0: October 1 (start of water year)
+- Water Day 365/366: September 30 (end of water year)
 
-### Leap Year Handling
-- Water years containing February 29th have 366 days
-- Water Year 2024 is a leap year (366 days)
-- Water Year 2025 is not a leap year (365 days)
+LEAP YEAR HANDLING:
+The script automatically handles leap years correctly:
+- Water Year 2024: 366 days (contains Feb 29, 2024)
+- Water Year 2025: 365 days (no leap day)
+- February 29th determination based on calendar year containing the leap day
 
-## Troubleshooting
+WATER DAY CALCULATION:
+- Precise decimal calculations for fractional days
+- Example: Day 45.25 = 45 days + 6 hours after water year start
+- Consistent with hydrological modeling standards
 
-### Common Issues
+YEAR ASSIGNMENT IN WYO FILES:
+- Water Days 0-364/365: Assigned to previous calendar year
+- Water Days 365/366+: Assigned to current water year
+- Ensures proper temporal continuity in WYO format
 
-**1. "Parameter file not found"**
-```
-Error: tts_merpar.par not found.
-```
-- **Solution**: Create `tts_merpar.par` in the same directory as the script
+================================================================================
+TROUBLESHOOTING
+================================================================================
 
-**2. "CSV file not found"**
-```
-Error: Shallow file 'data.csv' not found
-```
-- **Solution**: Check filename spelling in parameter file and ensure CSV files exist
+COMMON PROBLEMS AND SOLUTIONS:
 
-**3. "No valid data found"**
-```
-Error: no valid data found in filename.csv
-```
-- **Solution**: Check CSV format, ensure date/time strings are in supported format
+1. "Parameter file not found"
+   Error: tts_merpar.par not found.
+   Solution: Create tts_merpar.par in the same directory as the script
 
-**4. "Could not parse date"**
-```
-Warning: Could not parse date '25/12/23 14:30:00' on line 5
-```
-- **Solution**: Check date format, ensure MM/DD/YY format (not DD/MM/YY)
+2. "CSV file not found"
+   Error: Shallow file 'data.csv' not found
+   Solution: Check filename spelling in parameter file and ensure CSV files exist
 
-**5. Import errors**
-```
-ModuleNotFoundError: No module named 'pandas'
-```
-- **Solution**: Install required packages: `pip install pandas numpy matplotlib`
+3. "No valid data found"
+   Error: no valid data found in filename.csv
+   Solution: Check CSV format, ensure date/time strings are in supported format
 
-**6. Display issues on headless systems**
-```
-TclTK Error: no display
-```
-- **Solution**: Use a system with GUI support or set up X11 forwarding for SSH
+4. "Could not parse date"
+   Warning: Could not parse date '25/12/23 14:30:00' on line 5
+   Solution: Ensure MM/DD/YY format (not DD/MM/YY), check supported formats
 
-### Data Quality Issues
+5. Import errors
+   ModuleNotFoundError: No module named 'pandas'
+   Solution: Install required packages: pip install pandas numpy matplotlib
 
-**Gap Detection**:
-- The script automatically detects gaps in data
-- Gaps larger than `data_interval_min * gap_threshold_factor` are reported
-- Review gap reports to ensure data quality
+6. Display issues on headless systems
+   TclTK Error: no display
+   Solution: Use system with GUI support or set up X11 forwarding for SSH
 
-**Water Year Validation**:
-- Data outside the specified water year is flagged
-- Pre-season data (negative water days) indicates data from previous water year
-- Post-season data (water day > 365/366) indicates data from next water year
+7. Memory issues with large datasets
+   Solution: Increase system memory or split large datasets into smaller chunks
 
-### Performance Tips
+8. Interactive plot not responding
+   Solution: Check matplotlib backend, ensure GUI libraries are installed
 
-**Large Datasets**:
-- For datasets > 100,000 records, processing may take several minutes
-- Increase system memory if encountering memory errors
-- Consider splitting very large datasets into smaller chunks
+DATA QUALITY DIAGNOSTICS:
 
-**Interactive Plotting**:
-- Use plot zoom/pan tools for detailed inspection
-- Clear selections periodically to improve plot performance
-- Save intervals incrementally rather than making many selections at once
+Gap Detection:
+- Automatically detects gaps larger than interval × gap_threshold_factor
+- Reports gap locations and durations
+- Helps identify logger malfunctions or data transmission issues
 
-## Advanced Usage
+Water Year Validation:
+- Flags data outside specified water year
+- Identifies pre-season data (negative water days)
+- Identifies post-season data (water day > 365/366)
+- Ensures temporal consistency
 
-### Custom Filename Patterns
-The script creates intelligent base names from input filenames:
-- `temp-S.csv` + `temp-D.csv` → `temp-SD`
-- `site1_shallow.csv` + `site1_deep.csv` → `site1_SD`
-- `shallow.csv` + `deep.csv` → `shallow_deep`
+Date Format Validation:
+- Shows successful parsing examples in debug output
+- Reports specific parsing failures with line numbers
+- Suggests format corrections for failed dates
 
-### Multiple Water Years
-To process multiple water years:
-1. Create separate parameter files for each water year
-2. Run the script multiple times with different parameter files
-3. Organize output folders by water year
+================================================================================
+ENHANCED FEATURES (VERSION 2.0)
+================================================================================
 
-### Batch Processing
-For automated processing without interactive selection:
-```python
-# Modify the script to skip interactive plotting
-# and export full datasets directly
-```
+ADAPTIVE VISUALIZATION:
+- Zoom-responsive tick formatting for both axes
+- Time axis shows decimal precision when zoomed (0.1, 0.2, 0.5 days)
+- Temperature axis shows appropriate increments (0.1°C to 5°C)
+- Grid lines adapt automatically to zoom level
 
-## Support and Development
+USER INTERFACE IMPROVEMENTS:
+- Real-time selection rectangle updates
+- Editable selection bounds via text boxes
+- Visual feedback for saved vs. current selections
+- Enhanced plot styling and clarity
 
-### Script Information
-- **Author**: Timothy Wu
-- **Created**: June 26, 2025
-- **Version**: Alpha
-- **Language**: Python 3.7+
+FILENAME MANAGEMENT:
+- Complete user control over output filenames
+- No automatic suffix addition (user decides naming)
+- Intelligent base name generation from input files
+- Consistent file organization
 
-### Reporting Issues
-When reporting issues, please include:
-1. Complete error message
-2. Sample of your CSV data format
-3. Contents of your parameter file
-4. Python version and operating system
+DEBUG AND VALIDATION:
+- Clear explanations of date parsing process
+- Enhanced error reporting with solutions
+- Comprehensive data quality diagnostics
+- Detailed processing logs
 
-### Contributing
-This is research software. Contact the author for feature requests or modifications.
+PERFORMANCE OPTIMIZATIONS:
+- Efficient memory usage for large datasets
+- Responsive interactive plotting
+- Optimized data processing algorithms
+- Minimal computational overhead
 
-## License
+================================================================================
+EXAMPLE WORKFLOWS
+================================================================================
 
-This software is provided as-is for research and educational purposes. Modify and distribute as needed for your research applications.
+WORKFLOW 1: SINGLE INTERVAL EXTRACTION
+1. Load temperature data for water year 2024
+2. Zoom to period of interest (e.g., days 100-150)
+3. Fine-tune selection using text boxes (e.g., 120.5 to 135.2)
+4. Save with descriptive filename: "SpringPeak_2024"
+5. Results: SpringPeak_2024.csv, SpringPeak_2024-S.wyo, SpringPeak_2024-D.wyo
+
+WORKFLOW 2: MULTIPLE INTERVAL COMPARISON
+1. Load full water year dataset
+2. Select first interval (e.g., winter period): "Winter_Dec_Jan"
+3. Select second interval (e.g., summer period): "Summer_Jul_Aug"
+4. Select third interval (e.g., storm event): "Storm_Event_March"
+5. Compare intervals using generated files
+
+WORKFLOW 3: QUALITY ASSESSMENT WORKFLOW
+1. Load data and examine full time series
+2. Check console output for gap reports and parsing issues
+3. Zoom to suspicious periods for detailed inspection
+4. Export problem periods for further analysis
+5. Document data quality issues in processing log
+
+WORKFLOW 4: SEASONAL ANALYSIS PREPARATION
+1. Load annual temperature dataset
+2. Export seasonal intervals:
+   - Fall: Days 0-90 → "Fall_OctNovDec"
+   - Winter: Days 91-180 → "Winter_JanFebMar"
+   - Spring: Days 181-270 → "Spring_AprMayJun"
+   - Summer: Days 271-365 → "Summer_JulAugSep"
+3. Use consistent naming for downstream analysis
+
+WORKFLOW 5: EVENT-FOCUSED EXTRACTION
+1. Load data and zoom to event period
+2. Use precise text entry for exact timing
+3. Extract pre-event baseline: "Baseline_Pre"
+4. Extract event period: "Event_Peak"
+5. Extract recovery period: "Recovery_Post"
+6. Maintain temporal continuity for analysis
+
+================================================================================
+TECHNICAL SPECIFICATIONS
+================================================================================
+
+DATA PROCESSING:
+- Pandas-based data manipulation for reliability
+- Numpy for efficient numerical computations
+- Automatic datetime parsing with multiple format support
+- Nearest-neighbor timestamp alignment for merging
+
+WATER YEAR CALCULATIONS:
+- Precise decimal day calculations
+- Automatic leap year detection and handling
+- Temporal consistency validation
+- Standard hydrological conventions
+
+INTERACTIVE PLOTTING:
+- Matplotlib-based visualization with enhanced widgets
+- Real-time plot updates and responsive controls
+- Adaptive axis formatting based on zoom level
+- Professional-quality output suitable for publications
+
+FILE I/O:
+- Robust CSV parsing with error handling
+- Multiple output format support (CSV, WYO)
+- Comprehensive logging with timestamps
+- Automatic directory creation and management
+
+PERFORMANCE:
+- Optimized for datasets up to 100,000 records
+- Memory-efficient data structures
+- Responsive user interface
+- Minimal processing latency
+
+COMPATIBILITY:
+- Cross-platform support (Windows, macOS, Linux)
+- Python 3.7+ compatibility
+- Standard library dependencies where possible
+- Graceful degradation for missing optional features
+
+================================================================================
+INTEGRATION WITH OTHER TOOLS
+================================================================================
+
+DOWNSTREAM ANALYSIS:
+- Output files compatible with tts_frefil.py for frequency analysis
+- WYO format compatible with hydrological modeling software
+- CSV format suitable for statistical analysis packages
+- Maintains data precision for numerical modeling
+
+UPSTREAM DATA SOURCES:
+- Compatible with most temperature logger formats
+- Flexible date/time parsing for various instrument outputs
+- Handles both Fahrenheit and Celsius temperature units
+- Accommodates different sampling intervals
+
+WORKFLOW INTEGRATION:
+- Parameter files enable batch processing
+- Log files provide audit trail for reproducible analysis
+- Consistent file naming supports automated workflows
+- JSON parameter export for integration with other tools
+
+================================================================================
+SUPPORT AND DEVELOPMENT
+================================================================================
+
+REPORTING ISSUES:
+When reporting problems, please include:
+1. Complete error message and traceback
+2. Sample of your CSV data format (first 10 lines)
+3. Contents of your tts_merpar.par parameter file
+4. Python version and operating system information
+5. Steps to reproduce the issue
+
+KNOWN LIMITATIONS:
+- Text box editing uses standard matplotlib functionality (no Tab navigation)
+- Very large datasets (>500,000 records) may require increased memory
+- Interactive plotting requires GUI-capable system
+- Date parsing assumes MM/DD/YY format (not DD/MM/YY)
+
+FUTURE ENHANCEMENTS:
+- Web-based interface for improved user experience
+- Batch processing capabilities for multiple files
+- Advanced quality control and gap-filling options
+- Integration with real-time data acquisition systems
+
+================================================================================
+LICENSE AND CITATION
+================================================================================
+
+This software is provided for research and educational purposes.
+If using in published research, please cite appropriately.
+
+Purpose: Temperature time-series processing for UCSC Hydrology
+
+The software is provided as-is without warranty. Users are responsible for
+validating results and ensuring appropriateness for their specific applications.
+
+================================================================================
+CHANGELOG AND VERSION HISTORY
+================================================================================
+
+Last Updated: July 3, 2025
+
+Enhancement Sugesstions from: Dr. Andrew T. Fisher, Ethan Yan 
+
+VERSION 2.0 ENHANCEMENTS (July 3, 2025):
+
+MAJOR USER INTERFACE IMPROVEMENTS:
+ Adaptive Zoom-Responsive Axis Ticks
+   - Time axis now shows decimal water days when zoomed in (0.1, 0.2, 0.5 day intervals)
+   - Automatic tick density adjustment based on visible range
+   - Maintains readability at all zoom levels from full year to sub-daily resolution
+   - Enhanced grid formatting for professional presentation
+
+ Smart Temperature Axis Formatting
+   - Even degree increments for normal temperature ranges (2°C intervals)
+   - 0.1°C precision when zoomed to small temperature ranges
+   - Automatic adjustment from 0.1°C to 5°C intervals based on visible range
+   - Professional °C labeling on all major ticks
+
+ Editable Selection Bounds
+   - Real-time rectangle updates when editing Start WD/End WD text boxes
+   - Two-way synchronization between graphical selection and text input
+   - Fine-tune selections with decimal precision (e.g., 45.25 to 47.80)
+   - Immediate visual feedback for bound changes
+
+ User-Controlled Filename Management
+   - Removed automatic "_int##" suffix addition 
+   - Complete user control over output filenames
+   - Cleaner file organization with user-specified naming
+   - Maintains necessary -S and -D suffixes for WYO files only
+
+DATA PROCESSING ENHANCEMENTS:
+ Enhanced Debug Output and Validation
+   - Clarified "Raw date string" messages with success indicators
+   - Added ✓ checkmarks to show successful date format parsing
+   - Clear explanation that displayed dates are included in processing
+   - Better distinction between debug information and actual warnings
+
+ Improved Data Quality Reporting
+   - Enhanced gap detection with clear explanations
+   - Better water year validation with specific recommendations
+   - Comprehensive processing statistics and summaries
+   - Professional logging with timestamps and processing duration
+
+VISUAL AND INTERACTION IMPROVEMENTS:
+ Enhanced Selection Visualization
+   - Color-coded selection states (blue=current, green=saved)
+   - Persistent selection rectangles with improved styling
+   - Better visual feedback for saved vs. active selections
+   - Cleaner plot aesthetics with professional styling
+
+Stability and Error Handling
+   - Removed problematic Tab navigation due to matplotlib limitations
+   - Removed unreliable double-click text selection features
+   - Enhanced error handling with specific solution guidance
+   - Improved crash prevention and graceful error recovery
+
+TECHNICAL IMPROVEMENTS:
+ Performance Optimizations
+   - Efficient axis management with AdaptiveAxisManager class
+   - Optimized real-time rectangle updates
+   - Reduced computational overhead for interactive operations
+   - Better memory management for large datasets
+
+ Code Architecture Enhancements
+   - Modular axis management system
+   - Improved event handling architecture
+   - Better separation of concerns in UI components
+   - Enhanced maintainability and extensibility
+
+FEATURES ATTEMPTED BUT REMOVED (due to matplotlib limitations):
+ Tab Navigation Between Text Boxes
+   - Initial implementation caused crashes due to matplotlib widget focus issues
+   - Removed for stability - users can click to select text boxes instead
+
+ Advanced Text Selection (Double-click, Drag-select)
+   - matplotlib TextBox widgets have inherent limitations for rich text editing
+   - Removed to prevent errors - standard click-to-edit functionality maintained
+
+BACKWARD COMPATIBILITY:
+ All existing parameter files work unchanged
+ All output file formats remain identical
+ Command-line usage and workflow preserved
+ Full compatibility with downstream analysis tools
+
+VERSION 1.0 (Original Implementation - June 26, 2025):
+- Basic temperature data loading and parsing
+- Water year calculations and leap year handling
+- Interactive matplotlib plotting with basic selection
+- CSV and WYO file output formats
+- Parameter file configuration system
+- Comprehensive logging and error reporting
+
+SUMMARY OF VERSION 2.0 IMPACT:
+The Version 2.0 enhancements significantly improve the user experience while 
+maintaining full backward compatibility. Key improvements focus on:
+
+1. USABILITY: Adaptive ticks make zooming and detailed inspection much more effective
+2. PRECISION: Decimal water day editing enables exact interval specification  
+3. CLARITY: Enhanced debug output eliminates user confusion about data processing
+4. CONTROL: User-specified filenames provide better file organization
+5. STABILITY: Removal of problematic features ensures reliable operation
+
+These improvements make tts_merpar_alpha.py a more professional and user-friendly
+tool for temperature time-series processing while preserving all core functionality
+and ensuring seamless integration with existing workflows and downstream analysis tools.
+
+================================================================================
