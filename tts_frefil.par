@@ -1,0 +1,58 @@
+# Temperature Time-Series Frequency Filter Parameters
+# Parameter file for tts_frefil.py
+#
+# Format: parameter_name = value
+# Lines starting with # are comments
+
+# ===== General =====
+# Filename of composite data file (output from tts_merpar.py)
+# Should contain columns: WaterDay, TempShallow, TempDeep
+filename_composite_data = temperature_composite_data.csv
+
+# Data interval in minutes between consecutive measurements
+# This helps verify data integrity and calculate sampling frequency
+data_interval_minutes = 20
+
+# Time-bandwidth parameter for multitaper spectral analysis
+# Higher values give better frequency resolution but less time resolution
+# Typical values: 2-5 (4 is a good default)
+time_bandwidth_parameter = 4
+
+# ===== Spectral Analysis =====
+# Water Day (WD) limits to constrain spectral analysis to specific time range
+# Use -1 for both to analyze entire dataset
+# Example: wd_lower_limit = 100, wd_upper_limit = 200 analyzes days 100-200 only
+wd_lower_limit = -1
+wd_upper_limit = -1
+
+# ===== Filter =====
+# Start of frequency band pass (lower cutoff frequency in day^-1)
+# For diurnal (daily) cycles, typically around 0.8 day^-1
+start_band_pass = 0.8
+
+# End of frequency band pass (upper cutoff frequency in day^-1)
+# For diurnal (daily) cycles, typically around 1.2 day^-1
+end_band_pass = 1.2
+
+# Band pass ramp/taper fraction (0.0 to 0.5)
+# Controls smoothness of filter transitions at band edges
+# 0.1 = 10% taper on each side of the passband
+# 0.5 = 50% taper (recommended in specifications for optimal performance)
+ramp_fraction = 0.1
+
+# Filter order (integer, typically 2-20)
+# Higher order = sharper frequency cutoff but potential for ringing
+# 6 is a good balance for most applications
+filter_order = 6
+
+# Resample interval in minutes for output data
+# Usually same as data_interval_minutes to maintain original sampling
+# Can be different to upsample/downsample (e.g., 10 for finer, 30 for coarser)
+resample_interval = 20
+
+# ===== Output =====
+# Output folder name for filtered data files
+# This folder will be created automatically if it doesn't exist
+# All filtered CSV files will be saved in this folder
+# Use descriptive names like "Filter Data", "Filtered_Results", "Output_Files", etc.
+output_folder = Filter Data
