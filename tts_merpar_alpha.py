@@ -13,9 +13,18 @@ Main Features:
 - Interactive plotting with interval selection
 - Exports data in multiple formats (CSV, WYO)
 
+Enhanced Features (v2.0):
+- Adaptive zoom-responsive axis ticks
+- Editable selection bounds via text boxes
+- Improved user interface with better text handling
+- Cleaner filename management
+- Enhanced temperature axis formatting
+- Better debug output explanations
+
 Author: Timothy Wu
 Created: 6/26/2025
-Last Modified: 6/26/2025
+Last Updated: 7/3/2025
+Version: 2.0
 
 Requirements:
 - pandas, numpy, matplotlib
@@ -93,6 +102,155 @@ class TeeLogger:
         
         self.write(footer)
         self.log_file.close()
+
+
+class AdaptiveAxisManager:
+    """
+    Manages adaptive tick formatting for both time and temperature axes.
+    Automatically adjusts tick density and precision based on zoom level.
+    """
+    
+    def __init__(self, ax, wd_values, offset, plot_relative):
+        self.ax = ax
+        self.wd_values = wd_values
+        self.offset = offset
+        self.plot_relative = plot_relative
+        self.setup_axis_callbacks()
+    
+    def setup_axis_callbacks(self):
+        """Connect callbacks to axis limit changes for adaptive ticking."""
+        self.ax.callbacks.connect('xlim_changed', self.on_xlims_change)
+        self.ax.callbacks.connect('ylim_changed', self.on_ylims_change)
+    
+    def on_xlims_change(self, ax):
+        """Handle X-axis (time) limit changes for adaptive time ticks."""
+        x_min, x_max = ax.get_xlim()
+        x_range = x_max - x_min
+        
+        # Determine appropriate tick intervals based on visible range
+        if x_range <= 1:           # Less than 1 day
+            major_interval = 0.2   # Every 4.8 hours
+            minor_interval = 0.1   # Every 2.4 hours
+            precision = 1
+        elif x_range <= 3:         # Less than 3 days  
+            major_interval = 0.5   # Every 12 hours
+            minor_interval = 0.25  # Every 6 hours
+            precision = 1
+        elif x_range <= 7:         # Less than 1 week
+            major_interval = 1     # Daily
+            minor_interval = 0.5   # Every 12 hours
+            precision = 1
+        elif x_range <= 30:        # Less than 30 days
+            major_interval = 5     # Every 5 days
+            minor_interval = 1     # Daily
+            precision = 0
+        elif x_range <= 90:        # Less than 3 months
+            major_interval = 10    # Every 10 days
+            minor_interval = 5     # Every 5 days
+            precision = 0
+        elif x_range <= 180:       # Less than 6 months
+            major_interval = 20    # Every 20 days
+            minor_interval = 5     # Every 5 days
+            precision = 0
+        else:                      # Full year or more
+            major_interval = 50    # Every 50 days
+            minor_interval = 10    # Every 10 days
+            precision = 0
+        
+        # Create tick arrays
+        major_start = np.ceil(x_min / major_interval) * major_interval
+        major_ticks = np.arange(major_start, x_max + major_interval, major_interval)
+        
+        minor_start = np.ceil(x_min / minor_interval) * minor_interval
+        minor_ticks = np.arange(minor_start, x_max + minor_interval, minor_interval)
+        
+        # Remove overlapping ticks
+        minor_ticks = minor_ticks[~np.isin(minor_ticks, major_ticks)]
+        
+        # Apply ticks to plot
+        ax.set_xticks(major_ticks)
+        ax.set_xticks(minor_ticks, minor=True)
+        
+        # Format labels with appropriate precision
+        major_labels = []
+        for tick in major_ticks:
+            if precision == 0:
+                if self.plot_relative:
+                    major_labels.append(f'{int(tick)}')
+                else:
+                    if tick == 0:
+                        major_labels.append('0\n(Oct 1)')
+                    elif tick == 365 or tick == 366:
+                        major_labels.append(f'{int(tick)}\n(Sep 30)')
+                    else:
+                        major_labels.append(f'{int(tick)}')
+            else:
+                major_labels.append(f'{tick:.{precision}f}')
+        
+        ax.set_xticklabels(major_labels)
+        
+        # Style the ticks
+        ax.tick_params(axis='x', which='major', labelsize=10, length=8, width=1.5)
+        ax.tick_params(axis='x', which='minor', length=4, width=1)
+    
+    def on_ylims_change(self, ax):
+        """Handle Y-axis (temperature) limit changes for adaptive temperature ticks."""
+        y_min, y_max = ax.get_ylim()
+        y_range = y_max - y_min
+        
+        # Determine appropriate tick intervals for temperature
+        if y_range <= 1:           # Less than 1°C range
+            major_interval = 0.2   # Every 0.2°C
+            minor_interval = 0.1   # Every 0.1°C
+            precision = 1
+        elif y_range <= 2:         # Less than 2°C range
+            major_interval = 0.5   # Every 0.5°C
+            minor_interval = 0.1   # Every 0.1°C
+            precision = 1
+        elif y_range <= 5:         # Less than 5°C range
+            major_interval = 1     # Every 1°C
+            minor_interval = 0.5   # Every 0.5°C
+            precision = 1
+        elif y_range <= 20:        # Less than 20°C range
+            major_interval = 2     # Every 2°C (even degrees as requested)
+            minor_interval = 1     # Every 1°C
+            precision = 0
+        else:                      # Large range
+            major_interval = 5     # Every 5°C
+            minor_interval = 1     # Every 1°C
+            precision = 0
+        
+        # Create tick arrays
+        major_start = np.ceil(y_min / major_interval) * major_interval
+        major_ticks = np.arange(major_start, y_max + major_interval, major_interval)
+        
+        minor_start = np.ceil(y_min / minor_interval) * minor_interval
+        minor_ticks = np.arange(minor_start, y_max + minor_interval, minor_interval)
+        
+        # Remove overlapping ticks
+        minor_ticks = minor_ticks[~np.isin(minor_ticks, major_ticks)]
+        
+        # Apply ticks to plot
+        ax.set_yticks(major_ticks)
+        ax.set_yticks(minor_ticks, minor=True)
+        
+        # Format temperature labels
+        if precision == 0:
+            major_labels = [f'{int(tick)}°C' for tick in major_ticks]
+        else:
+            major_labels = [f'{tick:.{precision}f}°C' for tick in major_ticks]
+        
+        ax.set_yticklabels(major_labels)
+        
+        # Style the ticks
+        ax.tick_params(axis='y', which='major', labelsize=10, length=8, width=1.5)
+        ax.tick_params(axis='y', which='minor', length=4, width=1)
+
+
+# Note: Removed EnhancedTextBox class due to matplotlib limitations
+# Tab navigation and advanced text selection are not reliably supported
+# in matplotlib's widget system. Using standard TextBox instead.
+
 
 def is_leap_year(year):
     """
@@ -289,6 +447,8 @@ def read_logger_data(filename, label, search_dirs, convert_fahrenheit=False,
         '%m/%d/%Y %H:%M'         # 4-digit year no seconds
     ]
     
+    print(f"  Debug: Showing first 10 date strings to verify format detection...")
+    
     # Read and parse CSV file
     with open(file_path, newline='', encoding='utf-8', errors='ignore') as f:
         csv_reader = csv.reader(f)
@@ -307,15 +467,17 @@ def read_logger_data(filename, label, search_dirs, convert_fahrenheit=False,
             date_str = line[1].strip()
             temp_str = line[2].strip()
             
-            # Debug: Show first few raw date strings
+            # Debug: Show first few raw date strings (ENHANCED: Better explanation)
             if line_count <= 10 and date_str and not date_str.startswith('Date'):
-                print(f"  Raw date string (line {line_num}): '{date_str}'")
+                print(f"  Raw date string (line {line_num}): '{date_str}' -> Checking format compatibility...")
             
             # Try to parse datetime with multiple formats
             parsed_datetime = None
             for date_format in date_formats:
                 try:
                     parsed_datetime = datetime.strptime(date_str, date_format)
+                    if line_count <= 10 and date_str and not date_str.startswith('Date'):
+                        print(f"    ✓ Successfully parsed using format: {date_format}")
                     break
                 except ValueError:
                     continue
@@ -345,7 +507,10 @@ def read_logger_data(filename, label, search_dirs, convert_fahrenheit=False,
     if not rows:
         sys.exit(f"Error: no valid data found in {filename}")
     
-    print(f"  Loaded {len(rows)} valid records, {error_count} errors from {line_count} lines")
+    print(f"  ✓ Successfully loaded {len(rows)} valid records")
+    print(f"  ✓ All displayed date strings were successfully parsed and included")
+    if error_count > 0:
+        print(f"  ! Skipped {error_count} invalid records from {line_count} total lines")
     
     # Create DataFrame and sort by datetime
     df = pd.DataFrame(rows, columns=['DateTime', 'Temp']).sort_values('DateTime')
@@ -559,7 +724,7 @@ def make_base_name(shallow_fn, deep_fn):
 
 def setup_interactive_plot(merged_data, base_name, water_year, plot_relative=False):
     """
-    Create interactive matplotlib plot for data visualization and interval selection.
+    Create enhanced interactive matplotlib plot for data visualization and interval selection.
     
     Args:
         merged_data (pandas.DataFrame): Merged temperature data
@@ -568,7 +733,7 @@ def setup_interactive_plot(merged_data, base_name, water_year, plot_relative=Fal
         plot_relative (bool): Whether to plot relative to data start
         
     Returns:
-        tuple: (figure, axis, selector, text_boxes, buttons, selection_state)
+        tuple: (figure, axis, selector, text_boxes, buttons, selection_state, axis_manager)
     """
     print('\n=== Starting Interactive Selection ===')
     
@@ -590,11 +755,11 @@ def setup_interactive_plot(merged_data, base_name, water_year, plot_relative=Fal
     # Add water year boundary lines
     _add_water_year_boundaries(ax, water_year, plot_relative)
     
-    # Set up enhanced tick marks
-    _setup_enhanced_ticks(ax, wd_values, offset, plot_relative)
-    
-    # Configure plot appearance
+    # Configure plot appearance (without setting ticks - adaptive manager will handle)
     _configure_plot_appearance(ax, wd_values, offset, base_name, water_year, plot_relative)
+    
+    # Create adaptive axis manager for zoom-responsive ticks
+    axis_manager = AdaptiveAxisManager(ax, wd_values, offset, plot_relative)
     
     # Create interactive elements
     selector = _create_span_selector(ax, offset)
@@ -605,11 +770,15 @@ def setup_interactive_plot(merged_data, base_name, water_year, plot_relative=Fal
         'start': None, 
         'end': None, 
         'filename': f"{base_name}_interval",
-        'interval_count': 0,
-        'selection_rectangles': []  
+        'selection_rectangles': [],
+        'current_rect': None
     }
     
-    return fig, ax, selector, text_boxes, buttons, selection_state
+    # Initial axis setup to trigger adaptive ticks
+    axis_manager.on_xlims_change(ax)
+    axis_manager.on_ylims_change(ax)
+    
+    return fig, ax, selector, text_boxes, buttons, selection_state, axis_manager
 
 
 def _add_water_year_boundaries(ax, water_year, plot_relative):
@@ -628,61 +797,6 @@ def _add_water_year_boundaries(ax, water_year, plot_relative):
               label=f'WY End ({wy_end_date.strftime("%b %d, %Y")}) - Day {water_year_length}')
     
     print(f"Added water year boundary lines (Length: {water_year_length} days)")
-
-
-def _setup_enhanced_ticks(ax, wd_values, offset, plot_relative):
-    """Set up enhanced tick marks based on data range."""
-    if plot_relative:
-        data_min, data_max = 0, wd_values.max() - offset
-    else:
-        data_min, data_max = wd_values.min(), wd_values.max()
-    
-    data_range = data_max - data_min
-    
-    # Determine tick intervals based on data range
-    if data_range <= 30:      # Less than 30 days
-        major_interval, minor_interval = 5, 1
-    elif data_range <= 90:    # Less than 3 months
-        major_interval, minor_interval = 10, 1
-    elif data_range <= 180:   # Less than 6 months
-        major_interval, minor_interval = 20, 5
-    else:                     # Full year or more
-        major_interval, minor_interval = 50, 10
-    
-    # Create tick arrays
-    major_start = np.ceil(data_min / major_interval) * major_interval
-    major_ticks = np.arange(major_start, data_max + major_interval, major_interval)
-    
-    minor_start = np.ceil(data_min / minor_interval) * minor_interval
-    minor_ticks = np.arange(minor_start, data_max + minor_interval, minor_interval)
-    
-    # Remove overlapping ticks
-    minor_ticks = minor_ticks[~np.isin(minor_ticks, major_ticks)]
-    
-    # Apply ticks to plot
-    ax.set_xticks(major_ticks)
-    ax.set_xticks(minor_ticks, minor=True)
-    
-    # Format major tick labels
-    if plot_relative:
-        major_labels = [f'{int(tick)}' for tick in major_ticks]
-    else:
-        major_labels = []
-        for tick in major_ticks:
-            if tick == 0:
-                major_labels.append('0\n(Oct 1)')
-            elif tick == 365:
-                major_labels.append('365\n(Sep 30)')
-            else:
-                major_labels.append(f'{int(tick)}')
-    
-    ax.set_xticklabels(major_labels)
-    
-    # Style the ticks
-    ax.tick_params(axis='x', which='major', labelsize=10, length=8, width=1.5)
-    ax.tick_params(axis='x', which='minor', length=4, width=1)
-    
-    print(f"Set up ticks: Major every {major_interval} days, Minor every {minor_interval} day(s)")
 
 
 def _configure_plot_appearance(ax, wd_values, offset, base_name, water_year, plot_relative):
@@ -729,7 +843,7 @@ def _create_control_widgets(base_name):
     ax_clear = plt.axes([0.76, 0.13, 0.08, 0.04])     # Clear button
     ax_done = plt.axes([0.85, 0.13, 0.08, 0.04])      # Done button
     
-    # Create widgets
+    # Create standard widgets (matplotlib TextBox has inherent limitations)
     tb_start = TextBox(ax_start, 'Start WD: ')
     tb_end = TextBox(ax_end, 'End WD: ')
     tb_filename = TextBox(ax_filename, 'Filename: ')
@@ -805,7 +919,9 @@ def write_wyo_file(df_subset, temp_column, filename, water_year):
 
 def save_interval(event, merged_data, selection_state, text_boxes, out_dir, base_name, water_year):
     """
-    Save the selected interval to CSV and WYO files.
+    Save the selected interval to CSV and WYO files with user-controlled filenames.
+    
+    ENHANCED: No automatic suffix addition - user controls filename completely.
     
     Args:
         event: Button click event
@@ -813,7 +929,7 @@ def save_interval(event, merged_data, selection_state, text_boxes, out_dir, base
         selection_state (dict): Current selection state
         text_boxes (dict): Text input widgets
         out_dir (str): Output directory
-        base_name (str): Base filename
+        base_name (str): Base filename (for WYO files only)
         water_year (int): Water year for WYO files
     """
     try:
@@ -835,23 +951,36 @@ def save_interval(event, merged_data, selection_state, text_boxes, out_dir, base
             print(f"Warning: No data found in interval {start_wd:.5f} to {end_wd:.5f}")
             return
         
-        # Increment interval counter
-        selection_state['interval_count'] += 1
-        interval_suffix = f"_int{selection_state['interval_count']:02d}"
+        # ENHANCED: Use exact filename from user - no automatic suffix
+        # Ensure .csv extension
+        if not filename_base.endswith('.csv'):
+            filename_base += '.csv'
         
-        # Create output filenames
-        csv_filename = os.path.join(out_dir, f"{filename_base}{interval_suffix}.csv")
-        shallow_wyo = os.path.join(out_dir, f"{filename_base}-S{interval_suffix}.wyo")
-        deep_wyo = os.path.join(out_dir, f"{filename_base}-D{interval_suffix}.wyo")
+        csv_filename = os.path.join(out_dir, filename_base)
+        
+        # For WYO files, derive names from CSV filename
+        csv_base = os.path.splitext(filename_base)[0]  # Remove .csv
+        shallow_wyo = os.path.join(out_dir, f"{csv_base}-S.wyo")
+        deep_wyo = os.path.join(out_dir, f"{csv_base}-D.wyo")
         
         # Write files
         write_composite_csv(df_subset, csv_filename)
         write_wyo_file(df_subset, 'T_shallow', shallow_wyo, water_year)
         write_wyo_file(df_subset, 'T_deep', deep_wyo, water_year)
         
-        print(f"Saved interval {selection_state['interval_count']}: WD {start_wd:.5f} to {end_wd:.5f}")
+        print(f"✓ Saved interval: WD {start_wd:.5f} to {end_wd:.5f}")
         print(f"  Records: {len(df_subset)}")
         print(f"  Files: {os.path.basename(csv_filename)}, {os.path.basename(shallow_wyo)}, {os.path.basename(deep_wyo)}")
+        
+        # Move current selection to saved selections and change color
+        if 'current_rect' in selection_state and selection_state['current_rect']:
+            rect = selection_state['current_rect']
+            rect.set_facecolor('lightgreen')
+            rect.set_alpha(0.15)
+            rect.set_edgecolor('green')
+            selection_state['selection_rectangles'].append(rect)
+            selection_state['current_rect'] = None
+            plt.gcf().canvas.draw()
         
     except ValueError as e:
         print(f"Error: Invalid input values - {e}")
@@ -901,9 +1030,9 @@ def finish_processing(event, merged_data, out_dir, base_name, water_year, fig, l
 
 
 def setup_event_handlers(selector, text_boxes, buttons, merged_data, selection_state, 
-                        out_dir, base_name, water_year, fig, logger):
+                        out_dir, base_name, water_year, fig, logger, ax):
     """
-    Connect all event handlers for interactive plot.
+    Connect all event handlers for interactive plot with enhanced text box integration.
     
     Args:
         selector: SpanSelector widget
@@ -916,7 +1045,23 @@ def setup_event_handlers(selector, text_boxes, buttons, merged_data, selection_s
         water_year (int): Water year
         fig: Matplotlib figure
         logger: TeeLogger instance
+        ax: Plot axis
     """
+    def update_selection_rectangle(start_wd, end_wd):
+        """Update or create selection rectangle based on text box values."""
+        # Remove previous current rectangle if it exists
+        if 'current_rect' in selection_state and selection_state['current_rect']:
+            selection_state['current_rect'].remove()
+        
+        # Create new rectangle
+        y_min, y_max = ax.get_ylim()
+        rect = Rectangle((start_wd, y_min), end_wd - start_wd, y_max - y_min, 
+                        alpha=0.2, facecolor='lightblue', edgecolor='blue', 
+                        linewidth=2, linestyle='--')
+        ax.add_patch(rect)
+        selection_state['current_rect'] = rect
+        fig.canvas.draw()
+    
     def on_span_select(x_start, x_end):
         """Handle span selection from plot."""
         selection_state['start'] = x_start
@@ -926,38 +1071,38 @@ def setup_event_handlers(selector, text_boxes, buttons, merged_data, selection_s
         text_boxes['start'].set_val(f"{x_start:.5f}")
         text_boxes['end'].set_val(f"{x_end:.5f}")
     
-        # Remove previous current rectangle if it exists
-        if 'current_rect' in selection_state and selection_state['current_rect']:
-            selection_state['current_rect'].remove()
-    
-        # Add persistent rectangle for current selection
-        y_min, y_max = fig.axes[0].get_ylim()
-        rect = Rectangle((x_start, y_min), x_end - x_start, y_max - y_min, 
-                        alpha=0.2, facecolor='lightblue', edgecolor='blue', 
-                        linewidth=2, linestyle='--')
-        fig.axes[0].add_patch(rect)
-        selection_state['current_rect'] = rect
-        fig.canvas.draw()
-    
+        # Update selection rectangle
+        update_selection_rectangle(x_start, x_end)
+        
         print(f"Selected interval: WD {x_start:.5f} to {x_end:.5f}")
+    
+    def on_textbox_change(text_widget):
+        """Handle text box changes to update selection rectangle."""
+        try:
+            start_text = text_boxes['start'].text.strip()
+            end_text = text_boxes['end'].text.strip()
+            
+            if start_text and end_text:
+                start_wd = float(start_text)
+                end_wd = float(end_text)
+                
+                if start_wd < end_wd:
+                    selection_state['start'] = start_wd
+                    selection_state['end'] = end_wd
+                    update_selection_rectangle(start_wd, end_wd)
+                    print(f"Updated selection from text boxes: WD {start_wd:.5f} to {end_wd:.5f}")
+        except ValueError:
+            # Invalid values in text boxes - ignore
+            pass
     
     def on_save_click(event):
         """Handle save button click."""
         save_interval(event, merged_data, selection_state, text_boxes, 
                      out_dir, base_name, water_year)
-        # Move current selection to saved selections and change color
-    if 'current_rect' in selection_state and selection_state['current_rect']:
-        rect = selection_state['current_rect']
-        rect.set_facecolor('lightgreen')
-        rect.set_alpha(0.15)
-        selection_state['selection_rectangles'].append(rect)
-        selection_state['current_rect'] = None
-        fig.canvas.draw()
     
     def on_clear_click(event):
         """Handle clear button click - removes all selection rectangles."""
         # Get all Rectangle patches from the axes and remove them
-        ax = fig.axes[0]
         patches_to_remove = []
         for patch in ax.patches:
             if isinstance(patch, Rectangle):
@@ -987,13 +1132,18 @@ def setup_event_handlers(selector, text_boxes, buttons, merged_data, selection_s
     buttons['save'].on_clicked(on_save_click)
     buttons['clear'].on_clicked(on_clear_click)  
     buttons['done'].on_clicked(on_done_click)
+    
+    # Connect text box change events (using standard TextBox functionality)
+    text_boxes['start'].on_text_change(lambda text: on_textbox_change(text_boxes['start']))
+    text_boxes['end'].on_text_change(lambda text: on_textbox_change(text_boxes['end']))
 
 
 def main():
     """
     Main function to orchestrate the entire processing workflow.
     """
-    print("=== TTS_MERPAR: Temperature Time Series Merger and Processor ===\n")
+    print("=== TTS_MERPAR: Temperature Time Series Merger and Processor v2.0 ===")
+    print("Enhanced with adaptive zoom, editable selections, and improved stability\n")
     
     try:
         # Load and validate parameters
@@ -1048,28 +1198,34 @@ def main():
         # Create base name for output files
         base_name = make_base_name(params['fn_shallow'], params['fn_deep'])
         
-        # Set up interactive plot
-        fig, ax, selector, text_boxes, buttons, selection_state = setup_interactive_plot(
+        # Set up enhanced interactive plot
+        fig, ax, selector, text_boxes, buttons, selection_state, axis_manager = setup_interactive_plot(
             merged_data, base_name, params['water_year'], params['plot_relative']
         )
         
-        # Add this debug line
-        print(f"Debug: buttons keys = {list(buttons.keys())}")
-
-        # Connect event handlers
+        # Connect enhanced event handlers
         setup_event_handlers(
             selector, text_boxes, buttons, merged_data, selection_state,
-            out_dir, base_name, params['water_year'], fig, logger
+            out_dir, base_name, params['water_year'], fig, logger, ax
         )
         
-        # Display instructions and show plot
-        print("\n=== Interactive Selection Instructions ===")
+        # Display enhanced instructions and show plot
+        print("\n=== Enhanced Interactive Selection Instructions ===")
         print("1. Click and drag on the plot to select a data interval")
-        print("2. Adjust start/end values in text boxes if needed")
-        print("3. Modify filename if desired")
+        print("2. OR manually edit Start WD/End WD values to adjust selection bounds")
+        print("3. Modify filename as desired (no automatic suffixes added)")
         print("4. Click 'Save' to export the selected interval")
         print("5. Repeat for additional intervals")
         print("6. Click 'Done' when finished to create full-record files")
+        print("7. Zoom in/out to see adaptive tick formatting on both axes")
+        print("\nEnhanced Features:")
+        print("• Adaptive ticks adjust automatically when zooming")
+        print("• Edit selection bounds via text boxes")
+        print("• Temperature axis shows even degree increments")
+        print("• User controls exact filenames (no automatic suffixes)")
+        print("• Improved date format detection and validation")
+        print("\nNote: Text editing uses standard matplotlib functionality.")
+        print("Click in text boxes to edit, use mouse to position cursor.")
         print(f"\nNote: All WYO files will use Water Year {params['water_year']} in the Year column.")
         
         # Warning messages for anomalous data
@@ -1078,7 +1234,7 @@ def main():
         if len(merged_data[merged_data['WaterDay'] > 365]) > 0:
             print("Warning: WaterDay > 365 indicates data from the next water year.")
         
-        # Show the interactive plot
+        # Show the enhanced interactive plot
         plt.show()
         
     except Exception as e:
@@ -1089,188 +1245,3 @@ def main():
 # Script entry point
 if __name__ == "__main__":
     main()
-
-''' <-- remove these comments to test 
-"""
-Leap Year Logic Verification for TTS_MERPAR
-
-This script tests and verifies the leap year logic to ensure it works correctly
-for water year calculations.
-"""
-
-from datetime import datetime, timedelta
-
-def is_leap_year(year):
-    """Check if a given year is a leap year."""
-    return (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
-
-def get_water_year_length(water_year):
-    """
-    Get the length of a water year in days.
-    
-    For water year calculations:
-    - Water Year 2024 runs from Oct 1, 2023 to Sep 30, 2024
-    - February 29th (leap day) falls in calendar year 2024
-    - So we check if calendar year 2024 is a leap year
-    """
-    calendar_year_with_feb = water_year
-    return 366 if is_leap_year(calendar_year_with_feb) else 365
-
-def verify_water_year_calculation(water_year):
-    """
-    Verify water year calculation by actually counting the days.
-    """
-    start_date = datetime(water_year - 1, 10, 1)  # Oct 1 of previous year
-    end_date = datetime(water_year, 9, 30)        # Sep 30 of water year
-    
-    # Calculate actual number of days
-    actual_days = (end_date - start_date).days + 1  # +1 to include both start and end dates
-    
-    # Get our calculated length
-    calculated_length = get_water_year_length(water_year)
-    
-    return actual_days, calculated_length
-
-def test_leap_year_logic():
-    """
-    Test the leap year logic with various scenarios.
-    """
-    print("=== LEAP YEAR LOGIC VERIFICATION ===\n")
-    
-    # Test basic leap year function
-    print("1. Testing basic leap year function:")
-    test_years = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 1900, 2000]
-    for year in test_years:
-        is_leap = is_leap_year(year)
-        print(f"   {year}: {'LEAP' if is_leap else 'NOT LEAP'}")
-    
-    print("\n2. Testing water year length calculations:")
-    print("   Water Year | Feb 29 in | Expected | Calculated | Actual | Match?")
-    print("   -----------|-----------|----------|------------|--------|-------")
-    
-    water_years_to_test = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028]
-    
-    for wy in water_years_to_test:
-        feb_year = wy  # February falls in the same calendar year as water year
-        expected = 366 if is_leap_year(feb_year) else 365
-        calculated = get_water_year_length(wy)
-        actual, _ = verify_water_year_calculation(wy)
-        match = "✓" if expected == calculated == actual else "✗"
-        
-        print(f"   {wy:>10} | {feb_year:>8} | {expected:>8} | {calculated:>10} | {actual:>6} | {match:>6}")
-    
-    print("\n3. Detailed verification for key years:")
-    
-    # Test Water Year 2024 (leap year)
-    print("\n   Water Year 2024 (LEAP YEAR):")
-    print("   - Starts: Oct 1, 2023")
-    print("   - Ends: Sep 30, 2024")
-    print("   - Contains: Feb 29, 2024 (leap day)")
-    actual_2024, calc_2024 = verify_water_year_calculation(2024)
-    print(f"   - Calculated length: {calc_2024} days")
-    print(f"   - Actual length: {actual_2024} days")
-    print(f"   - Correct: {'✓' if calc_2024 == actual_2024 == 366 else '✗'}")
-    
-    # Test Water Year 2025 (not leap year)
-    print("\n   Water Year 2025 (NOT LEAP YEAR):")
-    print("   - Starts: Oct 1, 2024")
-    print("   - Ends: Sep 30, 2025")
-    print("   - No leap day in 2025")
-    actual_2025, calc_2025 = verify_water_year_calculation(2025)
-    print(f"   - Calculated length: {calc_2025} days")
-    print(f"   - Actual length: {actual_2025} days")
-    print(f"   - Correct: {'✓' if calc_2025 == actual_2025 == 365 else '✗'}")
-    
-    print("\n4. Testing water day calculations:")
-    
-    # Test specific dates in Water Year 2024
-    test_dates_2024 = [
-        (datetime(2023, 10, 1), "WY 2024 Start"),
-        (datetime(2024, 2, 28), "Day before leap day"),
-        (datetime(2024, 2, 29), "Leap day"),
-        (datetime(2024, 3, 1), "Day after leap day"),
-        (datetime(2024, 9, 30), "WY 2024 End"),
-    ]
-    
-    print("\n   Water Year 2024 test dates:")
-    water_year_start_2024 = datetime(2023, 10, 1)
-    
-    for test_date, description in test_dates_2024:
-        water_day = (test_date - water_year_start_2024).total_seconds() / 86400.0
-        print(f"   {test_date.strftime('%Y-%m-%d')}: Water Day {water_day:7.2f} ({description})")
-    
-    # Test specific dates in Water Year 2025
-    test_dates_2025 = [
-        (datetime(2024, 10, 1), "WY 2025 Start"),
-        (datetime(2025, 2, 28), "Last day of Feb (no leap day)"),
-        (datetime(2025, 3, 1), "March 1"),
-        (datetime(2025, 9, 30), "WY 2025 End"),
-    ]
-    
-    print("\n   Water Year 2025 test dates:")
-    water_year_start_2025 = datetime(2024, 10, 1)
-    
-    for test_date, description in test_dates_2025:
-        water_day = (test_date - water_year_start_2025).total_seconds() / 86400.0
-        print(f"   {test_date.strftime('%Y-%m-%d')}: Water Day {water_day:7.2f} ({description})")
-    
-    print("\n5. Edge case testing:")
-    
-    # Test century years (tricky leap year rules)
-    century_years = [1900, 2000, 2100, 2400]
-    print("\n   Century year leap year tests:")
-    for year in century_years:
-        is_leap = is_leap_year(year)
-        # Verify with Python's built-in logic
-        try:
-            datetime(year, 2, 29)
-            python_says_leap = True
-        except ValueError:
-            python_says_leap = False
-        
-        match = "✓" if is_leap == python_says_leap else "✗"
-        print(f"   {year}: Our function = {'LEAP' if is_leap else 'NOT LEAP'}, "
-              f"Python built-in = {'LEAP' if python_says_leap else 'NOT LEAP'} {match}")
-    
-    print("\n=== VERIFICATION COMPLETE ===")
-    print("\nSUMMARY:")
-    print("- The leap year logic correctly identifies leap years using the standard rules")
-    print("- Water year length calculation properly accounts for February 29th")
-    print("- Water Year 2024 correctly shows 366 days (includes Feb 29, 2024)")
-    print("- Water Year 2025 correctly shows 365 days (no leap day)")
-    print("- Century year edge cases are handled correctly")
-
-def test_wyo_file_logic():
-    """
-    Test the logic used in WYO file writing to ensure year assignments are correct.
-    """
-    print("\n=== WYO FILE YEAR ASSIGNMENT LOGIC TEST ===\n")
-    
-    # Test Water Year 2024 (leap year)
-    water_year = 2024
-    water_year_length = get_water_year_length(water_year)
-    
-    print(f"Water Year {water_year} (Length: {water_year_length} days)")
-    print("Water Day | Assigned Calendar Year | Reasoning")
-    print("----------|------------------------|----------")
-    
-    test_water_days = [0, 50, 100, 150, 200, 250, 300, 350, 365, 366, 400]
-    
-    for wd in test_water_days:
-        if wd < water_year_length:
-            assigned_year = water_year - 1  # Previous calendar year
-            reasoning = f"< {water_year_length} days, so {water_year-1}"
-        else:
-            assigned_year = water_year      # Current water year
-            reasoning = f">= {water_year_length} days, so {water_year}"
-        
-        print(f"{wd:>9} | {assigned_year:>22} | {reasoning}")
-    
-    print(f"\nThis means:")
-    print(f"- Water Days 0-{water_year_length-1} get assigned to calendar year {water_year-1}")
-    print(f"- Water Days {water_year_length}+ get assigned to calendar year {water_year}")
-
-if __name__ == "__main__":
-    test_leap_year_logic()
-    test_wyo_file_logic()
-remove these comments to test ---> ''' 
