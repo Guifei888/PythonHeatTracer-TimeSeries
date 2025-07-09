@@ -1,0 +1,48 @@
+# Thermal Probe Peak Picker Parameter File
+# tts_pickpeak.par
+#
+# This file contains initial parameters for the peak picking analysis.
+# Parameters can be modified within the tool and saved back to this file.
+#
+# Format: parameter_name = value
+# Lines starting with # are comments
+
+[PARAMETERS]
+# Input data file (can be selected via GUI)
+data_file = 
+
+# Sensor spacing in meters (used in formatted output file)
+sensor_spacing = 0.18
+
+# Desired time period between peaks (days)
+# Common values: 1.0 (daily), 0.5 (semi-daily), 2.0 (bi-daily)
+target_period = 1.0
+
+# Timing threshold for searching for next peak (days)
+# This defines the window around the expected peak location
+search_tolerance = 0.1
+
+# Slope threshold for identifying peaks and troughs (°C/min)
+# Lower values = more sensitive detection
+slope_threshold = 0.001
+
+# Minimum distance between peaks (in samples)
+min_distance = 20
+
+# Prominence factor (0-1) for peak detection
+# Lower values = more peaks detected
+prominence_factor = 0.3
+
+# Output folder name (created in same directory as script)
+output_folder = peak_analysis_output
+
+# Default peak detection method
+# Options: scipy, wavelet, derivative, prominence, bootstrap
+peak_method = scipy
+
+# Display colors and sizes
+shallow_color = blue
+deep_color = red
+peak_size = 12
+trough_size = 10
+line_width = 2
