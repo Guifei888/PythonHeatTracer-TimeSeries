@@ -1,0 +1,41 @@
+# -----------------------------------------------------------------------------
+# tts_mergpars.par  — parameters for initial merge/parse script (tts_mergpars.py)
+# -----------------------------------------------------------------------------
+
+# 1) Raw input files
+#    The two logger CSVs, one for the shallow sensor (“-S”) and one for deep (“-D”).
+#    Must live in the same folder (or cwd) as this .par and the script.
+filename_shallow    = PR24_TP04-S.csv     # Shallow logger CSV (DateTime, Temp, …)
+filename_deep       = PR24_TP04-D.csv     # Deep   logger CSV
+
+# 2) Water-year settings
+#    water_year = calendar year of the WY (e.g. 2024 → WY24 runs from 10/01/23→09/30/24)
+water_year          = 2024
+
+# 3) Sampling interval
+#    Nominal minutes between readings (used for gap checking and later steps).
+data_interval_min   = 20.0                # e.g., 15.0 or 20.0
+
+# 4) Unit conversion
+#    If your raw CSV recorded °F, set to 1 to convert to °C; otherwise 0.
+convert_f_to_c      = 0                   # 0 = already °C, 1 = convert from °F
+
+# 5) Gap detection
+#    A “gap” is any Δt > (gap_threshold_factor × data_interval_min) in minutes.
+#    Gaps will be printed to the console for your review.
+gap_threshold_factor = 1.5                 # e.g., 1.5 → flags Δt > 1.5× nominal
+
+# 6) Output
+#    Folder (under script directory) where composite CSVs and WYO files go.
+#    It will be created if it doesn’t exist.
+output_folder       = processed
+
+# 7) Plotting mode
+#    Determines how WaterDay is displayed in the interval selector:
+#      0 → absolute WD (since 10/1 of water_year–1)
+#      1 → zeroed at the start of each selected window
+plot_relative       = 0
+
+# -----------------------------------------------------------------------------
+# End of tts_mergpars.par
+# -----------------------------------------------------------------------------
