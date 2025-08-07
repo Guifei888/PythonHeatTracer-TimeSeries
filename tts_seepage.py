@@ -1069,7 +1069,7 @@ def create_enhanced_layout():
         # Header
         html.Div([
             html.H1("🚀 Enhanced Thermal Seepage Calculator", className="main-title"),
-            html.P("Advanced solvers with automatic uncertainty propagation - Much better than MATLAB!", 
+            html.P("Advanced solvers with automatic uncertainty propagation", 
                    className="subtitle")
         ], className="header"),
         
@@ -2418,15 +2418,6 @@ def save_parameters(n_clicks, lambda_val, alpha_t, rho_f, c_f, rho_s, porosity, 
 if __name__ == '__main__':
     logger.info("🚀 Starting Enhanced Thermal Seepage Calculator")
     logger.info("="*80)
-    logger.info("🎯 ENHANCEMENTS OVER MATLAB:")
-    logger.info("   • 🔬 Automatic uncertainty propagation with user-configurable parameters")
-    logger.info("   • 🚀 Advanced solvers (Hybrid, Newton, Brent, Anderson)")
-    logger.info("   • ⚡ Numba JIT acceleration (10-100x faster)")
-    logger.info("   • 📊 Much better convergence than fixed-point iteration")
-    logger.info("   • 🎨 Enhanced UI with real-time uncertainty configuration")
-    logger.info("   • 📁 Improved file parsing and comprehensive logging")
-    logger.info("   • 🎛️ User-adjustable uncertainty parameters for all sources")
-    logger.info("   • 📊 Uncertainty preview and quality assessment tools")
     logger.info("="*80)
     
     # Check dependencies
