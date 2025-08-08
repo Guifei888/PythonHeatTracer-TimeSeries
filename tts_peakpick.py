@@ -14,16 +14,18 @@ Features:
     - Enhanced session logger (with timestamped log files)
     - Supports parameter persistence via `.par` files
     - Custom export options and UI layout tuning
+    - User-selectable year for output files
 
-Enhanced in v1.3:
+Enhanced in v1.4:
+    - User-selectable year input for export files
     - Amplitude ratio and phase delay analysis
     - Session-aware log management
     - Improved robustness and UI experience
 
 Author: Timothy Wu  
 Created: 2025-07-08  
-Last Updated: 2025-07-24  
-Version: 1.3
+Last Updated: 2025-08-07  
+Version: 1.4
 
 Requirements:
     - dash, plotly, pandas, numpy, scipy, PyWavelets
@@ -1686,7 +1688,7 @@ app.layout = html.Div([
         html.Div(id='error-display', style={'marginTop': '10px'})
     ], style={'margin': '10px', 'padding': '10px', 'border': '2px solid #d32f2f', 'borderRadius': '5px'}),
     
-    # Export section with filename customization
+    # Export section with filename customization and YEAR INPUT
     html.Div([
         html.H3("Export Data"),
         html.Div([
@@ -1704,6 +1706,15 @@ app.layout = html.Div([
             html.Label("Formatted Data Filename:"),
             dcc.Input(id='formatted-filename', type='text', placeholder='peak_picks_formatted.csv', 
                      value='peak_picks_formatted.csv', style={'width': '200px', 'marginLeft': '10px'}),
+        ], style={'marginBottom': '10px'}),
+        # NEW: Year input field
+        html.Div([
+            html.Label("Data Year for .dAf file:"),
+            dcc.Input(id='data-year', type='number', 
+                     value=datetime.now().year, 
+                     min=1950, max=2150, step=1,
+                     style={'width': '100px', 'marginLeft': '10px'}),
+            html.Span(" (Used in formatted output file)", style={'fontSize': '0.9em', 'color': 'gray', 'marginLeft': '5px'})
         ], style={'marginBottom': '10px'}),
         html.Div([
             html.Button('Check Errors', id='check-errors-button', n_clicks=0,
@@ -2890,18 +2901,21 @@ def check_errors_with_visual_markers_enhanced(n_clicks, stored_data, stored_peak
      State('formatted-filename', 'value'),
      State('sensor-spacing', 'value'),
      State('current-filename', 'children'),
-     State('amplitude-method', 'value')],
+     State('amplitude-method', 'value'),
+     State('data-year', 'value')],  # NEW: Add data-year state
     prevent_initial_call=True
 )
 def export_data_enhanced(n_clicks, stored_data, stored_peaks, output_folder, 
-                        peak_filename, formatted_filename, sensor_spacing, original_filename, amplitude_method):
+                        peak_filename, formatted_filename, sensor_spacing, original_filename, 
+                        amplitude_method, data_year):  # NEW: Add data_year parameter
     """
     Export peak data to CSV files with improved formatting and peak-trough amplitude support.
+    Now uses user-specified year instead of filename parsing.
     """
     if n_clicks == 0 or stored_data is None or stored_peaks is None:
         return ''
     
-    logger.user_action("Data export", f"using {amplitude_method} amplitude method")
+    logger.user_action("Data export", f"using {amplitude_method} amplitude method, year={data_year}")
     
     # Create output directory
     output_path = ensure_output_dir(output_folder)
@@ -2971,53 +2985,15 @@ def export_data_enhanced(n_clicks, stored_data, stored_peaks, output_folder,
             # Get amplitude ratio data
             ratio_data = calculate_amplitude_ratio_enhanced(shallow_amplitudes, deep_amplitudes)
             
-            # Convert to export format
+            # Convert to export format using user-specified year
             for ratio_info in ratio_data:
-                # Extract year from original filename if possible
-                year = datetime.now().year  # Default to current year
-                if original_filename:
-                    # Try multiple patterns for year extraction
-                    # Pattern 1: Look for 4-digit year (e.g., PR2024_...)
-                    year_match_4digit = re.search(r'(19|20|21)\d{2}', original_filename)
-                    if year_match_4digit:
-                        year = int(year_match_4digit.group(0))
-                    else:
-                        # Pattern 2: Look for 2-digit year after PR (e.g., PR24_...)
-                        year_match_2digit = re.search(r'PR(\d{2})_', original_filename)
-                        if year_match_2digit:
-                            two_digit_year = int(year_match_2digit.group(1))
-                            # Smart century detection
-                            current_year = datetime.now().year
-                            current_century = (current_year // 100) * 100
-                            current_year_2digit = current_year % 100
-                            
-                            # If 2-digit year is more than 50 years in future, assume previous century
-                            if two_digit_year > current_year_2digit + 50:
-                                year = current_century - 100 + two_digit_year
-                            else:
-                                year = current_century + two_digit_year
-                        else:
-                            # Pattern 3: Look for year in WY or water year format
-                            wy_match = re.search(r'WY(\d{2,4})', original_filename)
-                            if wy_match:
-                                wy_year = wy_match.group(1)
-                                if len(wy_year) == 2:
-                                    # Same smart century detection for WY format
-                                    two_digit_year = int(wy_year)
-                                    current_year = datetime.now().year
-                                    current_century = (current_year // 100) * 100
-                                    current_year_2digit = current_year % 100
-                                    
-                                    if two_digit_year > current_year_2digit + 50:
-                                        year = current_century - 100 + two_digit_year
-                                    else:
-                                        year = current_century + two_digit_year
-                                else:
-                                    year = int(wy_year)
+                # Use the year from the user input (data_year)
+                year = data_year if data_year is not None else datetime.now().year
                 
                 # Validate year is reasonable (1950-2150)
                 if year < 1950 or year > 2150:
                     year = datetime.now().year
+                    logger.warning(f"Invalid year {data_year}, using current year {year}", "EXPORT")
                 
                 ar_ps_data.append({
                     'Data_Year': year,
@@ -3056,45 +3032,13 @@ def export_data_enhanced(n_clicks, stored_data, stored_peaks, output_folder,
                             ar = float(d_amp / s_amp) if s_amp != 0 else 0
                             ps = float(d_time - s_time)
                             
-                            # Extract year from original filename if possible
-                            year = datetime.now().year  # Default to current year
-                            if original_filename:
-                                # Same year extraction logic as above
-                                year_match_4digit = re.search(r'(19|20|21)\d{2}', original_filename)
-                                if year_match_4digit:
-                                    year = int(year_match_4digit.group(0))
-                                else:
-                                    year_match_2digit = re.search(r'PR(\d{2})_', original_filename)
-                                    if year_match_2digit:
-                                        two_digit_year = int(year_match_2digit.group(1))
-                                        current_year = datetime.now().year
-                                        current_century = (current_year // 100) * 100
-                                        current_year_2digit = current_year % 100
-                                        
-                                        if two_digit_year > current_year_2digit + 50:
-                                            year = current_century - 100 + two_digit_year
-                                        else:
-                                            year = current_century + two_digit_year
-                                    else:
-                                        wy_match = re.search(r'WY(\d{2,4})', original_filename)
-                                        if wy_match:
-                                            wy_year = wy_match.group(1)
-                                            if len(wy_year) == 2:
-                                                two_digit_year = int(wy_year)
-                                                current_year = datetime.now().year
-                                                current_century = (current_year // 100) * 100
-                                                current_year_2digit = current_year % 100
-                                                
-                                                if two_digit_year > current_year_2digit + 50:
-                                                    year = current_century - 100 + two_digit_year
-                                                else:
-                                                    year = current_century + two_digit_year
-                                            else:
-                                                year = int(wy_year)
+                            # Use the year from the user input (data_year)
+                            year = data_year if data_year is not None else datetime.now().year
                             
                             # Validate year is reasonable (1950-2150)
                             if year < 1950 or year > 2150:
                                 year = datetime.now().year
+                                logger.warning(f"Invalid year {data_year}, using current year {year}", "EXPORT")
                             
                             ar_ps_data.append({
                                 'Data_Year': year,
@@ -3115,6 +3059,7 @@ def export_data_enhanced(n_clicks, stored_data, stored_peaks, output_folder,
             "----------------------------------------------------------------",
             f"{sensor_spacing:.3f} is the relative distance (in m) between sensors.",
             f"Amplitude calculation method: {amplitude_method}",
+            f"Data year: {data_year} (user-specified)",
             "----------------------------------------------------------------",
             ""
         ]
@@ -3137,15 +3082,15 @@ def export_data_enhanced(n_clicks, stored_data, stored_peaks, output_folder,
                 f.write(f"{row['Phase_Shift(days)']:.8f}\t")
                 f.write(f"{row['f_Uncertainty']:.8f}\n")
         
-        files_created.append(f"Formatted data: {formatted_filename} ({len(ar_ps_data)} ratio pairs, {amplitude_method} method)")
-        logger.info(f"Exported {len(ar_ps_data)} amplitude ratio/phase shift pairs using {amplitude_method} method", "EXPORT")
+        files_created.append(f"Formatted data: {formatted_filename} ({len(ar_ps_data)} ratio pairs, {amplitude_method} method, year={data_year})")
+        logger.info(f"Exported {len(ar_ps_data)} amplitude ratio/phase shift pairs using {amplitude_method} method with year {data_year}", "EXPORT")
     
     # Log export summary
     logger.export_data(str(output_path), files_created)
     
     return html.Div([
         html.P(f"✓ Exported {len(export_df)} peaks to {peak_filepath}"),
-        html.P(f"✓ Exported {len(ar_ps_data)} amplitude ratio/phase shift pairs to {formatted_filepath} using {amplitude_method} method" 
+        html.P(f"✓ Exported {len(ar_ps_data)} amplitude ratio/phase shift pairs to {formatted_filepath} using {amplitude_method} method with year {data_year}" 
                if formatted_filepath else "No valid peak pairs found for formatted output"),
         html.P(f"Files saved in: {output_path}")
     ], style={'color': 'green'})
@@ -3331,6 +3276,68 @@ def suggest_filenames(original_filename):
     
     return "peak_picks.csv", "peak_picks_formatted.csv"
 
+# NEW: Callback to auto-populate year from filename if present
+@app.callback(
+    Output('data-year', 'value'),
+    Input('current-filename', 'children'),
+    prevent_initial_call=True
+)
+def suggest_year_from_filename(original_filename):
+    """
+    Try to extract year from filename and suggest it, but user can still override.
+    This maintains the old functionality as a helpful default.
+    """
+    if original_filename:
+        # Try multiple patterns for year extraction (same logic as before)
+        # Pattern 1: Look for 4-digit year (e.g., PR2024_...)
+        year_match_4digit = re.search(r'(19|20|21)\d{2}', original_filename)
+        if year_match_4digit:
+            suggested_year = int(year_match_4digit.group(0))
+            logger.info(f"Suggested year {suggested_year} from filename pattern", "FILES")
+            return suggested_year
+        else:
+            # Pattern 2: Look for 2-digit year after PR (e.g., PR24_...)
+            year_match_2digit = re.search(r'PR(\d{2})_', original_filename)
+            if year_match_2digit:
+                two_digit_year = int(year_match_2digit.group(1))
+                # Smart century detection
+                current_year = datetime.now().year
+                current_century = (current_year // 100) * 100
+                current_year_2digit = current_year % 100
+                
+                # If 2-digit year is more than 50 years in future, assume previous century
+                if two_digit_year > current_year_2digit + 50:
+                    suggested_year = current_century - 100 + two_digit_year
+                else:
+                    suggested_year = current_century + two_digit_year
+                
+                logger.info(f"Suggested year {suggested_year} from 2-digit pattern ({two_digit_year})", "FILES")
+                return suggested_year
+            else:
+                # Pattern 3: Look for year in WY or water year format
+                wy_match = re.search(r'WY(\d{2,4})', original_filename)
+                if wy_match:
+                    wy_year = wy_match.group(1)
+                    if len(wy_year) == 2:
+                        # Same smart century detection for WY format
+                        two_digit_year = int(wy_year)
+                        current_year = datetime.now().year
+                        current_century = (current_year // 100) * 100
+                        current_year_2digit = current_year % 100
+                        
+                        if two_digit_year > current_year_2digit + 50:
+                            suggested_year = current_century - 100 + two_digit_year
+                        else:
+                            suggested_year = current_century + two_digit_year
+                    else:
+                        suggested_year = int(wy_year)
+                    
+                    logger.info(f"Suggested year {suggested_year} from WY pattern", "FILES")
+                    return suggested_year
+    
+    # If no year found in filename, keep current year as default
+    return no_update
+
 # ===========================
 # MAIN EXECUTION WITH ENHANCED LOGGING
 # ===========================
@@ -3338,7 +3345,7 @@ def suggest_filenames(original_filename):
 if __name__ == '__main__':
     # Enhanced startup information
     logger.info("="*80, "APP")
-    logger.info("TTS PEAK PICKER - ENHANCED VERSION WITH LOGGING AND PEAK-TROUGH ALGORITHM", "APP")
+    logger.info("TTS PEAK PICKER - ENHANCED VERSION WITH LOGGING, PEAK-TROUGH ALGORITHM, AND USER YEAR INPUT", "APP")
     logger.info("="*80, "APP")
     logger.info(f"Parameter file location: {PARAM_FILE}", "CONFIG")
     logger.info(f"Output will be saved to: {SCRIPT_DIR / initial_params['output_folder']}", "CONFIG")
@@ -3371,7 +3378,7 @@ if __name__ == '__main__':
         save_param_file(default_params, PARAM_FILE)
         
         # Also create a sample .par file with comments using only ASCII characters
-        sample_content = """# Thermal Probe Peak Picker Parameter File - Enhanced Version
+        sample_content = """# Thermal Probe Peak Picker Parameter File - Enhanced Version with User Year Input
 # tts_peakpick.par
 #
 # This file contains initial parameters for the peak picking analysis.
@@ -3382,6 +3389,7 @@ if __name__ == '__main__':
 # - Peak-trough amplitude calculation for better accuracy
 # - Visual error markers on graphs
 # - Improved peak detection algorithms
+# - User-selectable year input for export files
 #
 # Format: parameter_name = value
 # Lines starting with # are comments
@@ -3454,7 +3462,8 @@ line_width = 2
     # Clean up old log files
     logger.cleanup_old_logs(keep_days=30)
     
-    logger.info("Key Features - Enhanced Version with Logging and Peak-Trough Algorithm:", "FEATURES")
+    logger.info("Key Features - Enhanced Version with User Year Input:", "FEATURES")
+    logger.info("✅ USER YEAR INPUT: Manual year selection for .dAf export files", "FEATURES")
     logger.info("✅ COMPREHENSIVE LOGGING: Session tracking with detailed logs in logs/ folder", "FEATURES")
     logger.info("✅ PEAK-TROUGH AMPLITUDE: More accurate A = (Peak - Trough) / 2 calculation", "FEATURES")
     logger.info("✅ VISUAL ERROR MARKERS: Red ❌ marks show exact error locations on graph", "FEATURES")
@@ -3469,6 +3478,13 @@ line_width = 2
     logger.info("✅ Improved robustness and data validation", "FEATURES")
     logger.info("✅ Enhanced parameter validation with warnings", "FEATURES")
     logger.info("✅ Better peak detection algorithms with fallback methods", "FEATURES")
+    
+    logger.info("Year Input Features:", "FEATURES")
+    logger.info("📅 User can manually specify data year for .dAf export", "FEATURES")
+    logger.info("📅 Year auto-suggested from filename but user can override", "FEATURES")
+    logger.info("📅 Year validation (1950-2150) with fallback to current year", "FEATURES")
+    logger.info("📅 Year included in export status and log messages", "FEATURES")
+    logger.info("📅 No more dependency on filename parsing for year determination", "FEATURES")
     
     logger.info("Logging Features:", "FEATURES")
     logger.info("📋 Session tracking with timestamps and unique session IDs", "FEATURES")
@@ -3496,12 +3512,13 @@ line_width = 2
     
     logger.info("Usage:", "USAGE")
     logger.info("1. Load your thermal probe data (CSV with WaterDay, Shallow.Temp.Filt, Deep.Temp.Filt)", "USAGE")
-    logger.info("2. Choose amplitude calculation method (peak-trough recommended)", "USAGE")
-    logger.info("3. Use manual peak selection or automated detection methods", "USAGE")
-    logger.info("4. Click 'Check Errors' to see visual error markers on the graph", "USAGE")
-    logger.info("5. Fix errors by adding/removing peaks or adjusting parameters", "USAGE")
-    logger.info("6. Export your results when satisfied with peak quality", "USAGE")
-    logger.info("7. Review session logs in the logs/ folder for detailed analysis", "USAGE")
+    logger.info("2. Set the data year in the textbox (auto-suggested from filename)", "USAGE")
+    logger.info("3. Choose amplitude calculation method (peak-trough recommended)", "USAGE")
+    logger.info("4. Use manual peak selection or automated detection methods", "USAGE")
+    logger.info("5. Click 'Check Errors' to see visual error markers on the graph", "USAGE")
+    logger.info("6. Fix errors by adding/removing peaks or adjusting parameters", "USAGE")
+    logger.info("7. Export your results with the specified year included in .dAf file", "USAGE")
+    logger.info("8. Review session logs in the logs/ folder for detailed analysis", "USAGE")
     
     logger.info("Starting enhanced web application at http://127.0.0.1:8052/", "APP")
     logger.info("Press Ctrl+C to stop the application", "APP")
