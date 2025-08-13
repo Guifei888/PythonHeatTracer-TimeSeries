@@ -15,8 +15,12 @@ Features:
     - Supports parameter persistence via `.par` files
     - Custom export options and UI layout tuning
     - User-selectable year for output files
+    - FIXED: Persistent trough clearing
+    - FIXED: Multiple time exclusion ranges with auto-clearing inputs
 
-Enhanced in v1.4:
+Enhanced in v1.4.1:
+    - FIXED: Clear troughs now stays cleared until 'Detect Peaks' is clicked
+    - FIXED: Multiple exclusion ranges with improved UI and auto-clearing inputs
     - User-selectable year input for export files
     - Amplitude ratio and phase delay analysis
     - Session-aware log management
@@ -24,8 +28,8 @@ Enhanced in v1.4:
 
 Author: Timothy Wu  
 Created: 2025-07-08  
-Last Updated: 2025-08-07  
-Version: 1.4
+Last Updated: 2025-08-13  
+Version: 1.4.1
 
 Requirements:
     - dash, plotly, pandas, numpy, scipy, PyWavelets
@@ -638,7 +642,8 @@ def load_param_file(filepath=None):
         'ar_tolerance': 0.001,  # Amplitude ratio tolerance for error checking
         'phase_max_limit': 1.0,  # Maximum phase shift limit (days)
         'phase_min_limit': 0.001,  # Minimum phase shift limit (days)
-        'amplitude_method': 'peak-trough'  # New: amplitude calculation method
+        'amplitude_method': 'peak-trough',  # Amplitude calculation method
+        'removal_tolerance': 0.1  # NEW: Peak removal tolerance (days)
     }
     
     # Load from file if it exists
@@ -654,7 +659,7 @@ def load_param_file(filepath=None):
                     # Convert to appropriate type based on parameter
                     if key in ['sensor_spacing', 'target_period', 'search_tolerance', 
                               'slope_threshold', 'prominence_factor', 'ar_tolerance', 
-                              'phase_max_limit', 'phase_min_limit']:
+                              'phase_max_limit', 'phase_min_limit', 'removal_tolerance']:
                         params[key] = float(config['PARAMETERS'][key])
                     elif key in ['min_distance', 'peak_size', 'trough_size', 'line_width']:
                         params[key] = int(config['PARAMETERS'][key])
@@ -1565,6 +1570,20 @@ app.layout = html.Div([
                 html.Span(" (Lower = more peaks)", style={'fontSize': '0.9em', 'color': 'gray', 'marginLeft': '5px'})
             ], style={'display': 'inline-block', 'margin': '5px'}),
         ]),
+        # NEW: Row 3 - Peak removal settings
+        html.Div([
+            html.Div([
+                html.Label("🎯 Peak Removal Tolerance (days):"),
+                dcc.Input(id='removal-tolerance', type='number', 
+                         value=0.1, min=0.01, max=1.0, step=0.01),
+                html.Span(" (Click tolerance for removing peaks)", style={'fontSize': '0.9em', 'color': 'gray', 'marginLeft': '5px'})
+            ], style={'display': 'inline-block', 'margin': '5px'}),
+            html.Div([
+                html.Button('Reset Removed Peaks', id='reset-removed-button', n_clicks=0, 
+                           style={'backgroundColor': '#2196F3', 'color': 'white', 'marginLeft': '10px'}),
+                html.Span(" (Restore excluded peaks)", style={'fontSize': '0.9em', 'color': 'gray', 'marginLeft': '5px'})
+            ], style={'display': 'inline-block', 'margin': '5px'}),
+        ]),
         # NEW: Amplitude calculation method selection
         html.Div([
             html.H4("Amplitude Calculation Method", style={'color': '#2E86AB', 'margin': '10px 0 5px 0'}),
@@ -1620,8 +1639,9 @@ app.layout = html.Div([
                 html.Li("For noisy data: Use 'Custom Derivative Method' or 'Combined Methods'"),
                 html.Li("Bootstrap: Add a few manual peaks first, then use 'Bootstrap' to find similar patterns"),
                 html.Li("Peak-Trough Method: Better for asymmetric waves and low amplitude signals"),
-                html.Li("All detection methods allow manual editing - add/remove peaks as needed"),
-                html.Li("Use 'Clear Troughs' to remove unwanted trough markers"),
+                html.Li("🎯 FIXED Peak Removal: Now removes only CLOSEST peak (adjust tolerance as needed)"),
+                html.Li("🔄 Removed peaks come back when you click 'Detect Peaks' or 'Reset Removed Peaks'"),
+                html.Li("🗑️ Use 'Clear Troughs' to remove unwanted trough markers PERMANENTLY"),
                 html.Li("Use 'Toggle Peak Visibility' if peaks become transparent or hard to see")
             ], style={'fontSize': '0.9em', 'margin': '5px 0'})
         ], style={'backgroundColor': '#f0f8ff', 'padding': '10px', 'borderRadius': '5px', 'marginTop': '10px'})
@@ -1656,26 +1676,31 @@ app.layout = html.Div([
             html.P("📌 Click on the graph to:", style={'fontWeight': 'bold', 'margin': '5px 0'}),
             html.Ul([
                 html.Li("Add Shallow/Deep Peaks: Click near temperature peaks"),
-                html.Li("Remove Peaks: Click near any peak (detected or manual) to remove it"),
+                html.Li("🎯 Remove Peaks: FIXED - Click near peak to remove CLOSEST one only (adjustable tolerance)"),
                 html.Li("View Mode: Standard pan/zoom behavior (zoom state preserved)"),
-                html.Li("Use 'Clear Troughs' button to remove all trough markers"),
+                html.Li("🗑️ Use 'Clear Troughs' button to remove all trough markers PERMANENTLY"),
+                html.Li("🔄 Use 'Reset Removed Peaks' to restore excluded peaks"),
                 html.Li("Use 'Toggle Peak Visibility' if peaks become hard to see"),
                 html.Li("Check Errors: Red ❌ markers show error locations on graph"),
                 html.Li("Peak-Trough Method: Uses trough data for better amplitude calculation")
             ], style={'fontSize': '0.9em', 'margin': '5px 0'})
         ], style={'backgroundColor': '#f0f8ff', 'padding': '10px', 'borderRadius': '5px', 'marginTop': '10px'}),
-        # Time range exclusion controls
+        # IMPROVED Time range exclusion controls with multiple exclusion support
         html.Div([
-            html.Label("Exclude Time Range (only when mode is 'Exclude Time Range'):"),
+            html.Label("Exclude Time Ranges:"),
+            html.P("Add multiple time ranges to exclude from peak detection. Each range excludes peaks between Start Day and End Day.", 
+                   style={'fontSize': '0.9em', 'color': 'gray', 'margin': '5px 0'}),
             html.Div([
                 dcc.Input(id='exclude-start', type='number', placeholder='Start Day', 
                          style={'width': '100px', 'marginRight': '10px'}),
                 dcc.Input(id='exclude-end', type='number', placeholder='End Day', 
                          style={'width': '100px', 'marginRight': '10px'}),
-                html.Button('Add Exclusion', id='add-exclusion-button', n_clicks=0),
-                html.Button('Clear Exclusions', id='clear-exclusions-button', n_clicks=0, 
-                           style={'marginLeft': '10px'})
-            ], style={'marginTop': '5px'})
+                html.Button('Add Exclusion', id='add-exclusion-button', n_clicks=0,
+                           style={'backgroundColor': '#ff9800', 'color': 'white'}),
+                html.Button('Clear All Exclusions', id='clear-exclusions-button', n_clicks=0, 
+                           style={'marginLeft': '10px', 'backgroundColor': '#f44336', 'color': 'white'})
+            ], style={'marginTop': '5px'}),
+            html.Div(id='exclusion-list-display', style={'marginTop': '10px'})
         ], id='exclusion-controls', style={'marginTop': '10px'}),
         html.Div(id='selection-info', style={'marginTop': '10px'})
     ], style={'margin': '10px', 'padding': '10px', 'border': '1px solid #ddd'}),
@@ -1733,7 +1758,9 @@ app.layout = html.Div([
              children=json.dumps({'shallow_peaks': [], 'deep_peaks': [], 'excluded_ranges': []})),
     html.Div(id='excluded-ranges-store', style={'display': 'none'}),
     html.Div(id='current-filename', style={'display': 'none'}),
-    html.Div(id='peak-visibility-state', style={'display': 'none'}, children='visible')
+    html.Div(id='peak-visibility-state', style={'display': 'none'}, children='visible'),
+    # NEW: Storage for persistent trough clearing state
+    html.Div(id='trough-cleared-state', style={'display': 'none'}, children='false')
 ])
 
 # ===========================
@@ -1950,15 +1977,23 @@ def populate_interactive_graph(stored_data):
     
     return fig
 
+# ===========================
+# FIXED MAIN CALLBACK WITH PERSISTENT TROUGH CLEARING AND MULTIPLE EXCLUSIONS
+# ===========================
+
 @app.callback(
     [Output('stored-peaks', 'children'),
      Output('interactive-graph', 'figure', allow_duplicate=True),
-     Output('manual-selections-store', 'children')],
+     Output('manual-selections-store', 'children'),
+     Output('trough-cleared-state', 'children'),  # NEW: Add this output
+     Output('exclude-start', 'value'),  # NEW: Add this output  
+     Output('exclude-end', 'value')],   # NEW: Add this output
     [Input('detect-button', 'n_clicks'),
      Input('interactive-graph', 'clickData'),
      Input('add-exclusion-button', 'n_clicks'),
      Input('clear-exclusions-button', 'n_clicks'),
-     Input('clear-troughs-button', 'n_clicks')],
+     Input('clear-troughs-button', 'n_clicks'),
+     Input('reset-removed-button', 'n_clicks')],  # NEW: Add reset button input
     [State('stored-data', 'children'),
      State('peak-method-dropdown', 'value'),
      State('target-period', 'value'),
@@ -1972,21 +2007,26 @@ def populate_interactive_graph(stored_data):
      State('exclude-end', 'value'),
      State('sensor-spacing', 'value'),
      State('interactive-graph', 'figure'),
-     State('peak-visibility-state', 'children')],
+     State('peak-visibility-state', 'children'),
+     State('trough-cleared-state', 'children'),
+     State('removal-tolerance', 'value')],  # NEW: Add removal tolerance state
     prevent_initial_call=True
 )
-def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks, 
-                            clear_exclusions_clicks, clear_troughs_clicks, stored_data, method, target_period, 
+def detect_peaks_and_interact_fixed(n_clicks, click_data, add_exclusion_clicks, 
+                            clear_exclusions_clicks, clear_troughs_clicks, reset_removed_clicks, stored_data, method, target_period, 
                             tolerance, slope_threshold, min_distance, prominence_factor, 
                             interaction_mode, manual_store, exclude_start, exclude_end, 
-                            sensor_spacing, current_figure, visibility_state):
+                            sensor_spacing, current_figure, visibility_state, trough_cleared_state, removal_tolerance):
     """
-    Enhanced callback for peak detection and interaction with zoom state preservation and trough management.
+    Enhanced callback with persistent trough clearing and improved multiple exclusions.
     """
     if stored_data is None:
-        return None, go.Figure(), json.dumps({'shallow_peaks': [], 'deep_peaks': [], 'excluded_ranges': []})
+        return None, go.Figure(), json.dumps({'shallow_peaks': [], 'deep_peaks': [], 'excluded_ranges': []}), 'false', None, None
     
-    # Ensure visibility_state is properly set and define related variables
+    # Parse trough cleared state
+    troughs_are_cleared = trough_cleared_state == 'true' if trough_cleared_state else False
+    
+    # Ensure visibility_state is properly set
     if visibility_state is None:
         visibility_state = 'visible'
     
@@ -1996,7 +2036,7 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
         peak_visible = True
     else:
         peak_opacity = 0.3
-        peak_visible = True  # Keep visible but with reduced opacity
+        peak_visible = True
     
     # Load data
     df = pd.read_json(StringIO(stored_data), orient='split')
@@ -2015,11 +2055,10 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
         if 'yaxis' in current_figure['layout'] and 'range' in current_figure['layout']['yaxis']:
             current_yaxis_range = current_figure['layout']['yaxis']['range']
     
-    # Handle manual selections - ensure proper initialization
+    # Handle manual selections
     if manual_store:
         try:
             manual_selections = json.loads(manual_store)
-            # Ensure all required keys exist
             if 'shallow_peaks' not in manual_selections:
                 manual_selections['shallow_peaks'] = []
             if 'deep_peaks' not in manual_selections:
@@ -2031,49 +2070,68 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
     else:
         manual_selections = {'shallow_peaks': [], 'deep_peaks': [], 'excluded_ranges': []}
     
-    # Keep track of all detected peaks for removal functionality
+    # Keep track of detected peaks for removal functionality
     detected_peaks = {'shallow_peaks': [], 'deep_peaks': []}
-    
-    # Initialize force_clear_troughs flag
-    force_clear_troughs = False
     
     # Determine which input triggered the callback
     triggered = ctx.triggered_id
     
+    # Initialize return values for input clearing
+    new_exclude_start = exclude_start
+    new_exclude_end = exclude_end
+    
+    # Set default removal tolerance if not provided
+    if removal_tolerance is None:
+        removal_tolerance = 0.1
+    
     # Log user actions
     if triggered == 'detect-button':
         logger.user_action(f"Peak detection using {method} method")
+        # RESET trough cleared state when detecting new peaks
+        troughs_are_cleared = False
+        # CLEAR excluded detected peaks when detecting new peaks (so they come back)
+        if 'excluded_detected_peaks' in manual_selections:
+            excluded_count = len(manual_selections['excluded_detected_peaks'].get('shallow', [])) + len(manual_selections['excluded_detected_peaks'].get('deep', []))
+            if excluded_count > 0:
+                logger.info(f"Clearing {excluded_count} previously excluded detected peaks", "USER")
+            manual_selections['excluded_detected_peaks'] = {'shallow': [], 'deep': []}
     elif triggered == 'interactive-graph':
         logger.user_action(f"Graph interaction in {interaction_mode} mode")
     elif triggered == 'clear-troughs-button':
-        logger.user_action("Clear all troughs")
+        logger.user_action("Clear all troughs - PERSISTENT")
+        # SET persistent trough clearing
+        troughs_are_cleared = True
     elif triggered == 'add-exclusion-button':
         logger.user_action(f"Add time exclusion: {exclude_start}-{exclude_end}")
     elif triggered == 'clear-exclusions-button':
         logger.user_action("Clear all time exclusions")
+    elif triggered == 'reset-removed-button':
+        logger.user_action("Reset removed peaks")
+        # Clear all excluded detected peaks
+        if 'excluded_detected_peaks' in manual_selections:
+            excluded_count = len(manual_selections['excluded_detected_peaks'].get('shallow', [])) + len(manual_selections['excluded_detected_peaks'].get('deep', []))
+            logger.info(f"Restored {excluded_count} previously excluded detected peaks", "USER")
+            manual_selections['excluded_detected_peaks'] = {'shallow': [], 'deep': []}
     
-    # Handle exclusion range additions
+    # Handle exclusion range additions with input clearing
     if triggered == 'add-exclusion-button' and exclude_start is not None and exclude_end is not None:
         manual_selections['excluded_ranges'].append([exclude_start, exclude_end])
         logger.info(f"Added exclusion range: {exclude_start:.2f} to {exclude_end:.2f} days", "USER")
+        logger.info(f"Total exclusion ranges: {len(manual_selections['excluded_ranges'])}", "USER")
+        # Clear the input fields after adding
+        new_exclude_start = None
+        new_exclude_end = None
     
     # Handle clearing exclusions
     if triggered == 'clear-exclusions-button':
         manual_selections['excluded_ranges'] = []
         logger.info("Cleared all time exclusions", "USER")
     
-    # Handle clearing troughs
-    if triggered == 'clear-troughs-button':
-        # Force troughs to be empty by setting a flag
-        force_clear_troughs = True
-        logger.info("Clearing all trough markers", "USER")
-    else:
-        force_clear_troughs = False
-    
     # Handle click interactions for manual peak selection/removal
     if triggered == 'interactive-graph' and click_data and interaction_mode != 'view':
         click_point = click_data['points'][0]
         click_x = click_point['x']
+        click_y = click_point['y'] if 'y' in click_point else None
         
         # Find nearest data point
         nearest_idx = int(np.argmin(np.abs(water_day - click_x)))
@@ -2093,30 +2151,68 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
                 logger.warning(f"Deep peak already exists at index {nearest_idx}", "USER")
                 
         elif interaction_mode == 'remove':
-            # ENHANCED REMOVAL: Remove from ANY peaks (manual or detected)
+            # FIXED REMOVAL LOGIC - Only remove closest peak, use user tolerance
+            # This section handles MANUAL peaks only - detected peaks are handled after detection
             removed = False
+            removal_details = []
             
-            # First check manual selections
-            if nearest_idx in manual_selections['shallow_peaks']:
-                manual_selections['shallow_peaks'].remove(nearest_idx)
-                logger.info(f"Removed manual shallow peak at index {nearest_idx}", "USER")
+            # Use user-configurable tolerance (default 0.1 days = 2.4 hours)
+            time_tolerance = removal_tolerance
+            
+            # Function to find closest manual peak within tolerance
+            def find_closest_manual_peak(peak_list, peak_data, click_time):
+                if not peak_list:
+                    return None, float('inf')
+                
+                closest_peak = None
+                closest_distance = float('inf')
+                
+                for peak_idx in peak_list:
+                    if 0 <= peak_idx < len(water_day):
+                        peak_time = water_day[peak_idx]
+                        time_diff = abs(peak_time - click_time)
+                        
+                        if time_diff <= time_tolerance and time_diff < closest_distance:
+                            closest_distance = time_diff
+                            closest_peak = peak_idx
+                
+                return closest_peak, closest_distance
+            
+            # Find closest manual shallow peak
+            closest_shallow, shallow_dist = find_closest_manual_peak(
+                manual_selections['shallow_peaks'], shallow_temp, click_x)
+            
+            # Find closest manual deep peak
+            closest_deep, deep_dist = find_closest_manual_peak(
+                manual_selections['deep_peaks'], deep_temp, click_x)
+            
+            # Remove only the single closest peak
+            if closest_shallow is not None and (closest_deep is None or shallow_dist <= deep_dist):
+                # Remove closest shallow peak
+                manual_selections['shallow_peaks'].remove(closest_shallow)
+                peak_time = water_day[closest_shallow]
+                peak_temp = shallow_temp[closest_shallow]
+                removal_details.append(f"manual shallow peak at day {peak_time:.2f} (temp {peak_temp:.2f}°C, distance {shallow_dist:.3f} days)")
+                removed = True
+            elif closest_deep is not None:
+                # Remove closest deep peak
+                manual_selections['deep_peaks'].remove(closest_deep)
+                peak_time = water_day[closest_deep]
+                peak_temp = deep_temp[closest_deep]
+                removal_details.append(f"manual deep peak at day {peak_time:.2f} (temp {peak_temp:.2f}°C, distance {deep_dist:.3f} days)")
                 removed = True
             
-            if nearest_idx in manual_selections['deep_peaks']:
-                manual_selections['deep_peaks'].remove(nearest_idx)
-                logger.info(f"Removed manual deep peak at index {nearest_idx}", "USER")
-                removed = True
-            
-            if not removed:
-                # If not found in manual, we need to get detected peaks and store exclusions
-                # This requires running detection first to see what would be detected
-                logger.info(f"Peak at index {nearest_idx} not found in manual selections", "USER")
-                # We'll handle this by detecting peaks first, then checking for removal
+            # Log manual peak removal results
+            if removed:
+                logger.info(f"Removed closest manual peak: {', '.join(removal_details)}", "USER")
+            else:
+                logger.debug(f"No manual peaks found within {time_tolerance:.3f} days of click at day {click_x:.2f}", "USER")
     
-    # Detect peaks based on selected method (skip if only manual and no detection button pressed)
+    # Initialize trough arrays
     shallow_troughs = np.array([], dtype=int)
     deep_troughs = np.array([], dtype=int)
     
+    # Detect peaks based on selected method (skip if only manual and no detection button pressed)
     if method != 'manual' or triggered == 'detect-button':
         
         # Log peak detection parameters
@@ -2155,33 +2251,41 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
                                                prominence=deep_prominence,
                                                height=None)
             
-            # Find troughs by inverting the signal
-            shallow_troughs = scipy_find_peaks_method_improved(-shallow_temp, 
-                                                    distance=max(min_distance_samples, min_distance),
-                                                    prominence=shallow_prominence,
-                                                    height=None)
-            deep_troughs = scipy_find_peaks_method_improved(-deep_temp, 
-                                                 distance=max(min_distance_samples, min_distance),
-                                                 prominence=deep_prominence,
-                                                 height=None)
+            # Find troughs only if not in cleared state
+            if not troughs_are_cleared:
+                shallow_troughs = scipy_find_peaks_method_improved(-shallow_temp, 
+                                                        distance=max(min_distance_samples, min_distance),
+                                                        prominence=shallow_prominence,
+                                                        height=None)
+                deep_troughs = scipy_find_peaks_method_improved(-deep_temp, 
+                                                     distance=max(min_distance_samples, min_distance),
+                                                     prominence=deep_prominence,
+                                                     height=None)
             
         elif method == 'wavelet':
             detected_peaks['shallow_peaks'] = wavelet_peak_detection(shallow_temp)
             detected_peaks['deep_peaks'] = wavelet_peak_detection(deep_temp)
-            shallow_troughs = wavelet_peak_detection(-shallow_temp)
-            deep_troughs = wavelet_peak_detection(-deep_temp)
+            if not troughs_are_cleared:
+                shallow_troughs = wavelet_peak_detection(-shallow_temp)
+                deep_troughs = wavelet_peak_detection(-deep_temp)
             
         elif method == 'derivative':
-            detected_peaks['shallow_peaks'], shallow_troughs = derivative_peak_detection(
+            detected_peaks['shallow_peaks'], shallow_troughs_temp = derivative_peak_detection(
                 shallow_temp, water_day, slope_threshold, min_distance)
-            detected_peaks['deep_peaks'], deep_troughs = derivative_peak_detection(
+            detected_peaks['deep_peaks'], deep_troughs_temp = derivative_peak_detection(
                 deep_temp, water_day, slope_threshold, min_distance)
+            
+            # Only use troughs if not in cleared state
+            if not troughs_are_cleared:
+                shallow_troughs = shallow_troughs_temp
+                deep_troughs = deep_troughs_temp
             
         elif method == 'prominence':
             detected_peaks['shallow_peaks'] = prominence_based_detection(shallow_temp, prominence_factor)
             detected_peaks['deep_peaks'] = prominence_based_detection(deep_temp, prominence_factor)
-            shallow_troughs = prominence_based_detection(-shallow_temp, prominence_factor)
-            deep_troughs = prominence_based_detection(-deep_temp, prominence_factor)
+            if not troughs_are_cleared:
+                shallow_troughs = prominence_based_detection(-shallow_temp, prominence_factor)
+                deep_troughs = prominence_based_detection(-deep_temp, prominence_factor)
             
         elif method == 'combined':
             # Use combined method for maximum sensitivity
@@ -2195,13 +2299,14 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
                 deep_temp, water_day, target_period, 
                 max(min_distance_samples, min_distance))
             
-            # For troughs, invert the signal
-            shallow_troughs = combined_peak_detection(
-                -shallow_temp, water_day, target_period, 
-                max(min_distance_samples, min_distance))
-            deep_troughs = combined_peak_detection(
-                -deep_temp, water_day, target_period, 
-                max(min_distance_samples, min_distance))
+            # For troughs, invert the signal only if not cleared
+            if not troughs_are_cleared:
+                shallow_troughs = combined_peak_detection(
+                    -shallow_temp, water_day, target_period, 
+                    max(min_distance_samples, min_distance))
+                deep_troughs = combined_peak_detection(
+                    -deep_temp, water_day, target_period, 
+                    max(min_distance_samples, min_distance))
             
         elif method == 'bootstrap':
             # Use manual selections as seeds
@@ -2211,7 +2316,6 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
                     np.array(manual_selections['shallow_peaks'], dtype=int), 
                     target_period, tolerance)
             else:
-                # If not enough manual peaks, just use what we have
                 detected_peaks['shallow_peaks'] = np.array(manual_selections['shallow_peaks'], dtype=int)
                 
             if len(manual_selections['deep_peaks']) >= 2:
@@ -2220,12 +2324,10 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
                     np.array(manual_selections['deep_peaks'], dtype=int), 
                     target_period, tolerance)
             else:
-                # If not enough manual peaks, just use what we have
                 detected_peaks['deep_peaks'] = np.array(manual_selections['deep_peaks'], dtype=int)
             
-            # For bootstrap mode, we don't detect troughs automatically
-            shallow_troughs = np.array([], dtype=int)
-            deep_troughs = np.array([], dtype=int)
+            # For bootstrap mode, we don't detect troughs automatically unless specifically requested
+            # They remain empty (cleared) unless detection is run again
         
         # Log peak detection results
         logger.peak_detection(
@@ -2235,52 +2337,79 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
             detection_params
         )
     
-    # Handle forced trough clearing
-    if force_clear_troughs:
-        shallow_troughs = np.array([], dtype=int)
-        deep_troughs = np.array([], dtype=int)
-        logger.info("Troughs cleared by user request", "USER")
-    
-    # Handle removal of detected peaks if in remove mode and click happened
+    # FIXED removal of detected peaks - AFTER peak detection, only closest peak, user tolerance
     if triggered == 'interactive-graph' and interaction_mode == 'remove' and click_data:
         click_point = click_data['points'][0]
         click_x = click_point['x']
-        nearest_idx = int(np.argmin(np.abs(water_day - click_x)))
         
-        # Check if the clicked point is near any detected peaks
-        tolerance_samples = 10  # Allow clicking within 10 samples of peak
+        # Use user-configurable tolerance
+        time_tolerance_detected = removal_tolerance
+        detected_removed = []
         
-        # Check detected shallow peaks
-        if len(detected_peaks['shallow_peaks']) > 0:
-            distances = np.abs(detected_peaks['shallow_peaks'] - nearest_idx)
-            if np.any(distances <= tolerance_samples):
-                closest_peak_idx = detected_peaks['shallow_peaks'][np.argmin(distances)]
-                # Add to exclusion list (we'll filter out later)
-                if 'excluded_detected_peaks' not in manual_selections:
-                    manual_selections['excluded_detected_peaks'] = {'shallow': [], 'deep': []}
-                if closest_peak_idx not in manual_selections['excluded_detected_peaks']['shallow']:
-                    manual_selections['excluded_detected_peaks']['shallow'].append(int(closest_peak_idx))
-                    logger.info(f"Excluded detected shallow peak at index {closest_peak_idx}", "USER")
+        # Function to find closest detected peak within tolerance
+        def find_closest_detected_peak(peak_list, peak_data, click_time):
+            if len(peak_list) == 0:  # FIXED: Use len() instead of "not peak_list" for numpy arrays
+                return None, float('inf')
+            
+            closest_peak = None
+            closest_distance = float('inf')
+            
+            for peak_idx in peak_list:
+                if 0 <= peak_idx < len(water_day):
+                    peak_time = water_day[peak_idx]
+                    time_diff = abs(peak_time - click_time)
+                    
+                    if time_diff <= time_tolerance_detected and time_diff < closest_distance:
+                        closest_distance = time_diff
+                        closest_peak = peak_idx
+            
+            return closest_peak, closest_distance
         
-        # Check detected deep peaks
-        if len(detected_peaks['deep_peaks']) > 0:
-            distances = np.abs(detected_peaks['deep_peaks'] - nearest_idx)
-            if np.any(distances <= tolerance_samples):
-                closest_peak_idx = detected_peaks['deep_peaks'][np.argmin(distances)]
-                # Add to exclusion list
-                if 'excluded_detected_peaks' not in manual_selections:
-                    manual_selections['excluded_detected_peaks'] = {'shallow': [], 'deep': []}
-                if closest_peak_idx not in manual_selections['excluded_detected_peaks']['deep']:
-                    manual_selections['excluded_detected_peaks']['deep'].append(int(closest_peak_idx))
-                    logger.info(f"Excluded detected deep peak at index {closest_peak_idx}", "USER")
+        # Find closest detected shallow peak
+        closest_detected_shallow, shallow_dist = find_closest_detected_peak(
+            detected_peaks.get('shallow_peaks', []), shallow_temp, click_x)
+        
+        # Find closest detected deep peak
+        closest_detected_deep, deep_dist = find_closest_detected_peak(
+            detected_peaks.get('deep_peaks', []), deep_temp, click_x)
+        
+        # Remove only the single closest detected peak
+        if closest_detected_shallow is not None and (closest_detected_deep is None or shallow_dist <= deep_dist):
+            # Exclude closest detected shallow peak
+            if 'excluded_detected_peaks' not in manual_selections:
+                manual_selections['excluded_detected_peaks'] = {'shallow': [], 'deep': []}
+            if closest_detected_shallow not in manual_selections['excluded_detected_peaks']['shallow']:
+                manual_selections['excluded_detected_peaks']['shallow'].append(int(closest_detected_shallow))
+                peak_time = water_day[closest_detected_shallow]
+                peak_temp = shallow_temp[closest_detected_shallow]
+                detected_removed.append(f"detected shallow peak at day {peak_time:.2f} (temp {peak_temp:.2f}°C, distance {shallow_dist:.3f} days)")
+        elif closest_detected_deep is not None:
+            # Exclude closest detected deep peak
+            if 'excluded_detected_peaks' not in manual_selections:
+                manual_selections['excluded_detected_peaks'] = {'shallow': [], 'deep': []}
+            if closest_detected_deep not in manual_selections['excluded_detected_peaks']['deep']:
+                manual_selections['excluded_detected_peaks']['deep'].append(int(closest_detected_deep))
+                peak_time = water_day[closest_detected_deep]
+                peak_temp = deep_temp[closest_detected_deep]
+                detected_removed.append(f"detected deep peak at day {peak_time:.2f} (temp {peak_temp:.2f}°C, distance {deep_dist:.3f} days)")
+        
+        # Log detected peak removals
+        if detected_removed:
+            logger.info(f"Excluded closest detected peak: {', '.join(detected_removed)}", "USER")
+        else:
+            logger.debug(f"No detected peaks found within {time_tolerance_detected:.3f} days of click at day {click_x:.2f}", "USER")
+    
+    # PERSISTENT trough clearing logic
+    if troughs_are_cleared:
+        shallow_troughs = np.array([], dtype=int)
+        deep_troughs = np.array([], dtype=int)
+        logger.debug("Troughs kept cleared (persistent state)", "USER")
     
     # Combine detected and manual peaks, excluding removed detected peaks
     if method == 'manual':
-        # Manual mode: only use manually selected peaks
         shallow_peaks = np.array(manual_selections['shallow_peaks'], dtype=int)
         deep_peaks = np.array(manual_selections['deep_peaks'], dtype=int)
     else:
-        # Other methods: combine detected and manual, excluding removed detected peaks
         all_shallow = list(detected_peaks['shallow_peaks']) + manual_selections['shallow_peaks']
         all_deep = list(detected_peaks['deep_peaks']) + manual_selections['deep_peaks']
         
@@ -2292,7 +2421,7 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
         shallow_peaks = np.unique(np.array(all_shallow, dtype=int)) if len(all_shallow) > 0 else np.array([], dtype=int)
         deep_peaks = np.unique(np.array(all_deep, dtype=int)) if len(all_deep) > 0 else np.array([], dtype=int)
     
-    # Apply exclusion ranges - remove peaks within excluded time ranges
+    # Apply exclusion ranges
     if len(manual_selections.get('excluded_ranges', [])) > 0:
         for exclusion in manual_selections['excluded_ranges']:
             start_day, end_day = exclusion
@@ -2304,16 +2433,15 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
             if len(deep_peaks) > 0:
                 deep_mask = (water_day[deep_peaks] < start_day) | (water_day[deep_peaks] > end_day)
                 deep_peaks = deep_peaks[deep_mask]
-            # Remove shallow troughs in excluded range
+            # Remove troughs in excluded range
             if len(shallow_troughs) > 0:
                 shallow_trough_mask = (water_day[shallow_troughs] < start_day) | (water_day[shallow_troughs] > end_day)
                 shallow_troughs = shallow_troughs[shallow_trough_mask]
-            # Remove deep troughs in excluded range
             if len(deep_troughs) > 0:
                 deep_trough_mask = (water_day[deep_troughs] < start_day) | (water_day[deep_troughs] > end_day)
                 deep_troughs = deep_troughs[deep_trough_mask]
     
-    # Ensure all peak indices are integers and valid
+    # Ensure all peak indices are valid
     if isinstance(shallow_peaks, (list, np.ndarray)) and len(shallow_peaks) > 0:
         shallow_peaks = np.array([int(p) for p in shallow_peaks if 0 <= p < len(water_day)], dtype=int)
     else:
@@ -2374,7 +2502,7 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
             visible=peak_visible
         ))
     
-    # Add troughs with controlled visibility
+    # Add troughs with controlled visibility (only if they exist)
     if len(shallow_troughs) > 0:
         fig.add_trace(go.Scatter(
             x=water_day[shallow_troughs], y=shallow_temp[shallow_troughs],
@@ -2395,7 +2523,19 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
             visible=peak_visible
         ))
     
-    # Add manual selections with different symbols (show them separately if method is not manual)
+    # Show trough cleared status
+    if troughs_are_cleared and len(shallow_troughs) == 0 and len(deep_troughs) == 0:
+        fig.add_annotation(
+            text="🗑️ TROUGHS CLEARED (will stay cleared until 'Detect Peaks' is clicked)",
+            xref="paper", yref="paper",
+            x=0.02, y=0.02, showarrow=False,
+            font=dict(size=12, color="orange"),
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="orange",
+            borderwidth=1
+        )
+    
+    # Add manual selections with different symbols (if method is not manual)
     if method != 'manual':
         manual_shallow_indices = [int(idx) for idx in manual_selections['shallow_peaks'] if idx < len(water_day)]
         manual_deep_indices = [int(idx) for idx in manual_selections['deep_peaks'] if idx < len(water_day)]
@@ -2423,25 +2563,25 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
             ))
     
     # Add excluded ranges as shaded regions
-    for exclusion in manual_selections.get('excluded_ranges', []):
+    for i, exclusion in enumerate(manual_selections.get('excluded_ranges', [])):
         start_day, end_day = exclusion
         fig.add_vrect(
             x0=start_day, x1=end_day,
             fillcolor="gray", opacity=0.3,
             layer="below", line_width=0,
-            annotation_text=f"Excluded: {start_day:.1f}-{end_day:.1f}",
+            annotation_text=f"Excluded {i+1}: {start_day:.1f}-{end_day:.1f}",
             annotation_position="top left"
         )
-        
-    # Update layout with preserved zoom state and disabled selection
+    
+    # Update layout with preserved zoom state
     fig.update_layout(
         title='Interactive Peak Picking - Click to Add/Remove Peaks',
         xaxis_title='Water Day',
         yaxis_title='Temperature (°C)',
         hovermode='x unified',
         clickmode='event+select',
-        selectdirection='d',  # 'd' for diagonal selection
-        dragmode='zoom',  # Default to zoom mode
+        selectdirection='d',
+        dragmode='zoom',
         showlegend=True,
         legend=dict(
             yanchor="top",
@@ -2452,7 +2592,7 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
         height=700
     )
     
-    # Disable trace selection behavior that causes transparency issues
+    # Disable trace selection behavior
     fig.update_traces(selectedpoints=[], unselected={'marker': {'opacity': 1.0}})
     
     # Add a subtitle showing the current mode
@@ -2460,16 +2600,17 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
         'view': 'View Only Mode - Pan/Zoom enabled, zoom state preserved',
         'add_shallow': 'Click to Add Shallow Peaks (Blue)',
         'add_deep': 'Click to Add Deep Peaks (Red)',
-        'remove': 'Click to Remove ANY Peaks (Detected or Manual)',
+        'remove': f'🎯 FIXED Remove Mode - Click near peak to remove CLOSEST one (±{removal_tolerance:.3f} days tolerance)',
         'exclude': 'Use controls below to exclude time ranges',
         'show_all': 'Showing all local maxima/minima as gray dots'
     }
     if interaction_mode in mode_text:
+        mode_color = "red" if interaction_mode == 'remove' else ("green" if interaction_mode != 'view' else "black")
         fig.add_annotation(
             text=f"Mode: {mode_text[interaction_mode]}",
             xref="paper", yref="paper",
             x=0.5, y=1.05, showarrow=False,
-            font=dict(size=14, color="green" if interaction_mode != 'view' else "black")
+            font=dict(size=14, color=mode_color, weight="bold" if interaction_mode == 'remove' else "normal")
         )
     
     # Show all local maxima/minima if requested
@@ -2486,7 +2627,7 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
             if deep_temp[i] > deep_temp[i-1] and deep_temp[i] > deep_temp[i+1]:
                 all_deep_max.append(i)
         
-        # Add as small gray dots with controlled visibility
+        # Add as small gray dots
         if len(all_shallow_max) > 0:
             maxima_opacity = 0.7 if visibility_state == 'visible' else 0.2
             fig.add_trace(go.Scatter(
@@ -2519,7 +2660,7 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
     
     # Store peaks data
     peaks_data = {
-        'shallow_peaks': [int(p) for p in shallow_peaks],  # Convert to regular Python int
+        'shallow_peaks': [int(p) for p in shallow_peaks],
         'deep_peaks': [int(p) for p in deep_peaks],
         'shallow_troughs': [int(t) for t in shallow_troughs],
         'deep_troughs': [int(t) for t in deep_troughs]
@@ -2530,14 +2671,13 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
     logger.info(f"Method: {method}", "PEAKS")
     logger.info(f"Total shallow peaks: {len(peaks_data['shallow_peaks'])} (including {len(manual_selections['shallow_peaks'])} manual)", "PEAKS")
     logger.info(f"Total deep peaks: {len(peaks_data['deep_peaks'])} (including {len(manual_selections['deep_peaks'])} manual)", "PEAKS")
-    logger.info(f"Shallow troughs: {len(peaks_data['shallow_troughs'])}", "PEAKS")
-    logger.info(f"Deep troughs: {len(peaks_data['deep_troughs'])}", "PEAKS")
+    logger.info(f"Shallow troughs: {len(peaks_data['shallow_troughs'])} {'(CLEARED)' if troughs_are_cleared else ''}", "PEAKS")
+    logger.info(f"Deep troughs: {len(peaks_data['deep_troughs'])} {'(CLEARED)' if troughs_are_cleared else ''}", "PEAKS")
     logger.info(f"Excluded ranges: {len(manual_selections.get('excluded_ranges', []))}", "PEAKS")
-    logger.info(f"Zoom preserved: x={current_xaxis_range is not None}, y={current_yaxis_range is not None}", "UI")
-    logger.info(f"Visibility state: {visibility_state}", "UI")
+    logger.info(f"Trough cleared state: {troughs_are_cleared}", "PEAKS")
     logger.info("==============================", "PEAKS")
     
-    # Ensure manual selections are also regular ints
+    # Ensure manual selections are clean
     manual_selections_clean = {
         'shallow_peaks': [int(p) for p in manual_selections['shallow_peaks']],
         'deep_peaks': [int(p) for p in manual_selections['deep_peaks']],
@@ -2545,7 +2685,46 @@ def detect_peaks_and_interact(n_clicks, click_data, add_exclusion_clicks,
         'excluded_detected_peaks': manual_selections.get('excluded_detected_peaks', {'shallow': [], 'deep': []})
     }
     
-    return json.dumps(peaks_data), fig, json.dumps(manual_selections_clean)
+    # Return the trough cleared state and cleared input values
+    trough_state_to_return = 'true' if troughs_are_cleared else 'false'
+    
+    return (json.dumps(peaks_data), fig, json.dumps(manual_selections_clean), 
+            trough_state_to_return, new_exclude_start, new_exclude_end)
+
+# ===========================
+# NEW CALLBACK FOR EXCLUSION LIST DISPLAY
+# ===========================
+
+@app.callback(
+    Output('exclusion-list-display', 'children'),
+    Input('manual-selections-store', 'children')
+)
+def update_exclusion_display(manual_store):
+    """Display the list of current exclusions clearly."""
+    if manual_store:
+        try:
+            selections = json.loads(manual_store)
+            excluded_ranges = selections.get('excluded_ranges', [])
+            
+            if len(excluded_ranges) == 0:
+                return html.P("No time ranges excluded", style={'fontSize': '0.9em', 'color': 'gray', 'fontStyle': 'italic'})
+            
+            exclusion_items = []
+            for i, (start, end) in enumerate(excluded_ranges):
+                exclusion_items.append(
+                    html.Li(f"Range {i+1}: Day {start:.2f} to {end:.2f}", 
+                           style={'color': '#d32f2f', 'fontSize': '0.9em'})
+                )
+            
+            return html.Div([
+                html.P(f"Current exclusions ({len(excluded_ranges)} ranges):", 
+                      style={'fontWeight': 'bold', 'margin': '5px 0', 'color': '#d32f2f'}),
+                html.Ul(exclusion_items, style={'margin': '0'})
+            ])
+        except:
+            return html.P("Error reading exclusions", style={'color': 'red'})
+    
+    return html.P("No exclusions", style={'fontSize': '0.9em', 'color': 'gray'})
 
 @app.callback(
     Output('exclusion-controls', 'style'),
@@ -2562,27 +2741,35 @@ def toggle_exclusion_controls(mode):
     Output('selection-info', 'children'),
     Input('manual-selections-store', 'children')
 )
-def update_selection_info(manual_store):
-    """Update display of manual selection counts."""
+def update_selection_info_enhanced(manual_store):
+    """Update display of manual selection counts with enhanced exclusion info."""
     if manual_store:
         selections = json.loads(manual_store)
         info_items = [
             html.P(f"Manual Shallow Peaks: {len(selections['shallow_peaks'])}"),
             html.P(f"Manual Deep Peaks: {len(selections['deep_peaks'])}"),
-            html.P(f"Excluded Time Ranges: {len(selections.get('excluded_ranges', []))}"),
         ]
+        
+        # Enhanced exclusion display
+        excluded_ranges = selections.get('excluded_ranges', [])
+        if excluded_ranges:
+            info_items.append(
+                html.P(f"🚫 Excluded Time Ranges: {len(excluded_ranges)}", 
+                      style={'color': '#d32f2f', 'fontWeight': 'bold'})
+            )
+            for i, (start, end) in enumerate(excluded_ranges):
+                info_items.append(
+                    html.P(f"  📍 Range {i+1}: Day {start:.2f} - {end:.2f}", 
+                          style={'marginLeft': '20px', 'fontSize': '0.9em', 'color': '#d32f2f'})
+                )
+        else:
+            info_items.append(html.P("Excluded Time Ranges: 0", style={'color': 'gray'}))
         
         # Show excluded detected peaks if any
         excluded_detected = selections.get('excluded_detected_peaks', {'shallow': [], 'deep': []})
         if excluded_detected['shallow'] or excluded_detected['deep']:
             info_items.append(html.P(f"Excluded Detected Peaks: {len(excluded_detected['shallow'])} shallow, {len(excluded_detected['deep'])} deep", 
                                    style={'color': 'orange'}))
-        
-        # List excluded ranges
-        if selections.get('excluded_ranges'):
-            for i, (start, end) in enumerate(selections['excluded_ranges']):
-                info_items.append(html.P(f"  Range {i+1}: Day {start:.1f} - {end:.1f}", 
-                                       style={'marginLeft': '20px', 'fontSize': '0.9em'}))
         
         return html.Div(info_items)
     return "No manual selections"
@@ -3089,8 +3276,8 @@ def export_data_enhanced(n_clicks, stored_data, stored_peaks, output_folder,
     logger.export_data(str(output_path), files_created)
     
     return html.Div([
-        html.P(f"✓ Exported {len(export_df)} peaks to {peak_filepath}"),
-        html.P(f"✓ Exported {len(ar_ps_data)} amplitude ratio/phase shift pairs to {formatted_filepath} using {amplitude_method} method with year {data_year}" 
+        html.P(f"✅ Exported {len(export_df)} peaks to {peak_filepath}"),
+        html.P(f"✅ Exported {len(ar_ps_data)} amplitude ratio/phase shift pairs to {formatted_filepath} using {amplitude_method} method with year {data_year}" 
                if formatted_filepath else "No valid peak pairs found for formatted output"),
         html.P(f"Files saved in: {output_path}")
     ], style={'color': 'green'})
@@ -3109,6 +3296,7 @@ def export_data_enhanced(n_clicks, stored_data, stored_peaks, output_folder,
      Output('phase-max-limit', 'value'),
      Output('phase-min-limit', 'value'),
      Output('amplitude-method', 'value'),
+     Output('removal-tolerance', 'value'),  # NEW: Add removal tolerance
      Output('param-file-status', 'children')],
     Input('load-param-file-button', 'n_clicks'),
     prevent_initial_call=True
@@ -3130,7 +3318,8 @@ def load_parameters_from_file(n_clicks):
                params.get('phase_max_limit', 1.0),
                params.get('phase_min_limit', 0.001),
                params.get('amplitude_method', 'peak-trough'),
-               html.Span("✓ Parameters loaded from .par file", style={'color': 'green'}))
+               params.get('removal_tolerance', 0.1),  # NEW: Add removal tolerance
+               html.Span("✅ Parameters loaded from .par file", style={'color': 'green'}))
     return no_update
 
 @app.callback(
@@ -3148,12 +3337,13 @@ def load_parameters_from_file(n_clicks):
      State('phase-max-limit', 'value'),
      State('phase-min-limit', 'value'),
      State('amplitude-method', 'value'),
+     State('removal-tolerance', 'value'),  # NEW: Add removal tolerance
      State('current-filename', 'children')],
     prevent_initial_call=True
 )
 def save_parameters_to_file(n_clicks, period, tolerance, slope, distance, prominence, 
                            method, spacing, output_folder, ar_tol, phase_max, phase_min, 
-                           amplitude_method, data_filename):
+                           amplitude_method, removal_tol, data_filename):  # NEW: Add removal_tol parameter
     """Save current parameters to .par file."""
     if n_clicks > 0:
         logger.user_action("Save parameters to .par file")
@@ -3170,10 +3360,11 @@ def save_parameters_to_file(n_clicks, period, tolerance, slope, distance, promin
             'phase_max_limit': phase_max,
             'phase_min_limit': phase_min,
             'amplitude_method': amplitude_method,
+            'removal_tolerance': removal_tol,  # NEW: Add removal tolerance
             'data_file': data_filename or ''
         }
         save_param_file(params)
-        return html.Span("✓ Parameters saved to .par file", style={'color': 'green'})
+        return html.Span("✅ Parameters saved to .par file", style={'color': 'green'})
     return ''
 
 # Additional UI callbacks
@@ -3345,7 +3536,7 @@ def suggest_year_from_filename(original_filename):
 if __name__ == '__main__':
     # Enhanced startup information
     logger.info("="*80, "APP")
-    logger.info("TTS PEAK PICKER - ENHANCED VERSION WITH LOGGING, PEAK-TROUGH ALGORITHM, AND USER YEAR INPUT", "APP")
+    logger.info("TTS PEAK PICKER - ENHANCED VERSION v1.4.1 WITH FIXES", "APP")
     logger.info("="*80, "APP")
     logger.info(f"Parameter file location: {PARAM_FILE}", "CONFIG")
     logger.info(f"Output will be saved to: {SCRIPT_DIR / initial_params['output_folder']}", "CONFIG")
@@ -3373,7 +3564,8 @@ if __name__ == '__main__':
             'ar_tolerance': 0.001,
             'phase_max_limit': 1.0,
             'phase_min_limit': 0.001,
-            'amplitude_method': 'peak-trough'  # Default to peak-trough method
+            'amplitude_method': 'peak-trough',  # Default to peak-trough method
+            'removal_tolerance': 0.1  # NEW: Peak removal tolerance
         }
         save_param_file(default_params, PARAM_FILE)
         
@@ -3390,6 +3582,8 @@ if __name__ == '__main__':
 # - Visual error markers on graphs
 # - Improved peak detection algorithms
 # - User-selectable year input for export files
+# - FIXED: Persistent trough clearing
+# - FIXED: Multiple time exclusion ranges
 #
 # Format: parameter_name = value
 # Lines starting with # are comments
@@ -3445,6 +3639,10 @@ phase_max_limit = 1.0
 # Minimum allowed phase shift (days)  
 phase_min_limit = 0.001
 
+# Peak removal tolerance for interactive removal (days)
+# How close you need to click to a peak to remove it
+removal_tolerance = 0.1
+
 # Display colors and sizes
 shallow_color = blue
 deep_color = red
@@ -3462,63 +3660,55 @@ line_width = 2
     # Clean up old log files
     logger.cleanup_old_logs(keep_days=30)
     
-    logger.info("Key Features - Enhanced Version with User Year Input:", "FEATURES")
-    logger.info("✅ USER YEAR INPUT: Manual year selection for .dAf export files", "FEATURES")
-    logger.info("✅ COMPREHENSIVE LOGGING: Session tracking with detailed logs in logs/ folder", "FEATURES")
-    logger.info("✅ PEAK-TROUGH AMPLITUDE: More accurate A = (Peak - Trough) / 2 calculation", "FEATURES")
-    logger.info("✅ VISUAL ERROR MARKERS: Red ❌ marks show exact error locations on graph", "FEATURES")
-    logger.info("✅ TWO GRAPHS: Data verification (read-only) + Interactive peak picking", "FEATURES")
-    logger.info("✅ ENHANCED auto-load: Searches script directory and relative paths", "FEATURES")
-    logger.info("✅ ZOOM PRESERVATION: Graph maintains zoom level after peak edits", "FEATURES")
-    logger.info("✅ CLEAR TROUGHS: Orange button to remove all trough markers", "FEATURES")
-    logger.info("✅ TOGGLE VISIBILITY: Purple button to control peak opacity", "FEATURES")
-    logger.info("✅ Enhanced peak removal: can remove ANY peaks (detected or manual)", "FEATURES")
-    logger.info("✅ Amplitude method selection: Choose between peak-trough or peak-only", "FEATURES")
+    logger.info("Key Features - Enhanced Version v1.4.1 with FIXES:", "FEATURES")
+    logger.info("🗑️ FIXED: Clear troughs now stays cleared PERMANENTLY until 'Detect Peaks'", "FEATURES")
+    logger.info("🚫 FIXED: Multiple exclusion ranges with auto-clearing inputs", "FEATURES")
+    logger.info("🎯 FIXED: Peak removal now removes only CLOSEST peak with user tolerance", "FEATURES")
+    logger.info("📅 USER YEAR INPUT: Manual year selection for .dAf export files", "FEATURES")
+    logger.info("📋 COMPREHENSIVE LOGGING: Session tracking with detailed logs in logs/ folder", "FEATURES")
+    logger.info("🔬 PEAK-TROUGH AMPLITUDE: More accurate A = (Peak - Trough) / 2 calculation", "FEATURES")
+    logger.info("❌ VISUAL ERROR MARKERS: Red ❌ marks show exact error locations on graph", "FEATURES")
+    logger.info("📊 TWO GRAPHS: Data verification (read-only) + Interactive peak picking", "FEATURES")
+    logger.info("📁 ENHANCED auto-load: Searches script directory and relative paths", "FEATURES")
+    logger.info("🔍 ZOOM PRESERVATION: Graph maintains zoom level after peak edits", "FEATURES")
+    logger.info("👁️ TOGGLE VISIBILITY: Purple button to control peak opacity", "FEATURES")
+    logger.info("⚙️ Amplitude method selection: Choose between peak-trough or peak-only", "FEATURES")
     logger.info("✅ Comprehensive error checking with visual feedback", "FEATURES")
-    logger.info("✅ Improved robustness and data validation", "FEATURES")
-    logger.info("✅ Enhanced parameter validation with warnings", "FEATURES")
-    logger.info("✅ Better peak detection algorithms with fallback methods", "FEATURES")
+    logger.info("🛡️ Improved robustness and data validation", "FEATURES")
     
-    logger.info("Year Input Features:", "FEATURES")
-    logger.info("📅 User can manually specify data year for .dAf export", "FEATURES")
-    logger.info("📅 Year auto-suggested from filename but user can override", "FEATURES")
-    logger.info("📅 Year validation (1950-2150) with fallback to current year", "FEATURES")
-    logger.info("📅 Year included in export status and log messages", "FEATURES")
-    logger.info("📅 No more dependency on filename parsing for year determination", "FEATURES")
+    logger.info("🗑️ FIXED - Clear Troughs:", "FEATURES")
+    logger.info("• Troughs stay cleared permanently until 'Detect Peaks' is clicked", "FEATURES")
+    logger.info("• Visual indicator shows when troughs are cleared", "FEATURES")
+    logger.info("• No more troughs coming back after other interactions", "FEATURES")
     
-    logger.info("Logging Features:", "FEATURES")
-    logger.info("📋 Session tracking with timestamps and unique session IDs", "FEATURES")
-    logger.info("📋 Detailed user action logging for reproducibility", "FEATURES")
-    logger.info("📋 Peak detection parameter and result logging", "FEATURES")
-    logger.info("📋 Error checking summaries with counts by type", "FEATURES")
-    logger.info("📋 Data export tracking with file information", "FEATURES")
-    logger.info("📋 Automatic log cleanup (keeps 30 days by default)", "FEATURES")
+    logger.info("🚫 FIXED - Multiple Exclusions:", "FEATURES")
+    logger.info("• Add unlimited exclusion ranges by entering start/end and clicking 'Add'", "FEATURES")
+    logger.info("• Input fields clear automatically after adding each range", "FEATURES")
+    logger.info("• Numbered exclusion ranges shown on graph and in status", "FEATURES")
+    logger.info("• 'Clear All Exclusions' removes everything at once", "FEATURES")
     
-    logger.info("Peak-Trough Algorithm Features:", "FEATURES")
-    logger.info("🔬 More accurate amplitude calculation for asymmetric waves", "FEATURES")
-    logger.info("🔬 Better handling of signals with subtle trends", "FEATURES")
-    logger.info("🔬 Automatic peak-trough pairing within configurable time windows", "FEATURES")
-    logger.info("🔬 Fallback to peak-only method when no troughs are available", "FEATURES")
-    logger.info("🔬 Enhanced error checking with amplitude method information", "FEATURES")
-    logger.info("🔬 Export files include amplitude calculation method details", "FEATURES")
-    
-    logger.info("Error Visualization Features:", "FEATURES")
-    logger.info("❌ Red ❌ marks for unmatched peaks", "FEATURES")
-    logger.info("🔺 Orange triangles for alternation errors", "FEATURES")
-    logger.info("⬜ Yellow squares for amplitude ratio issues", "FEATURES")
-    logger.info("🔻 Blue triangles for phase shift problems", "FEATURES")
-    logger.info("ℹ️ Hover information showing error details", "FEATURES")
-    logger.info("📊 Automatic Y-axis adjustment to show error markers", "FEATURES")
+    logger.info("🎯 FIXED - Peak Removal:", "FEATURES")
+    logger.info("• Removes only the CLOSEST peak to click location", "FEATURES")
+    logger.info("• User-configurable tolerance (default 0.1 days = 2.4 hours)", "FEATURES")
+    logger.info("• Works on both manual and detected peaks", "FEATURES")
+    logger.info("• Removed peaks come back when 'Detect Peaks' is clicked", "FEATURES")
+    logger.info("• 'Reset Removed Peaks' button to restore excluded peaks", "FEATURES")
+    logger.info("• Visual feedback shows which peak was removed and distance", "FEATURES")
     
     logger.info("Usage:", "USAGE")
     logger.info("1. Load your thermal probe data (CSV with WaterDay, Shallow.Temp.Filt, Deep.Temp.Filt)", "USAGE")
     logger.info("2. Set the data year in the textbox (auto-suggested from filename)", "USAGE")
     logger.info("3. Choose amplitude calculation method (peak-trough recommended)", "USAGE")
-    logger.info("4. Use manual peak selection or automated detection methods", "USAGE")
-    logger.info("5. Click 'Check Errors' to see visual error markers on the graph", "USAGE")
-    logger.info("6. Fix errors by adding/removing peaks or adjusting parameters", "USAGE")
-    logger.info("7. Export your results with the specified year included in .dAf file", "USAGE")
-    logger.info("8. Review session logs in the logs/ folder for detailed analysis", "USAGE")
+    logger.info("4. Adjust Peak Removal Tolerance if needed (default 0.1 days)", "USAGE")
+    logger.info("5. Use manual peak selection or automated detection methods", "USAGE")
+    logger.info("6. 🗑️ Use 'Clear Troughs' to permanently remove trough markers", "USAGE")
+    logger.info("7. 🚫 Add multiple exclusion ranges: enter start/end, click 'Add Exclusion'", "USAGE")
+    logger.info("8. 🎯 FIXED peak removal: removes only closest peak, comes back with 'Detect Peaks'", "USAGE")
+    logger.info("9. 🔄 Use 'Reset Removed Peaks' to restore excluded peaks without re-detecting", "USAGE")
+    logger.info("10. Click 'Check Errors' to see visual error markers on the graph", "USAGE")
+    logger.info("11. Fix errors by adding/removing peaks or adjusting parameters", "USAGE")
+    logger.info("12. Export your results with the specified year included in .dAf file", "USAGE")
+    logger.info("13. Review session logs in the logs/ folder for detailed analysis", "USAGE")
     
     logger.info("Starting enhanced web application at http://127.0.0.1:8052/", "APP")
     logger.info("Press Ctrl+C to stop the application", "APP")
