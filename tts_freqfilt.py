@@ -17,17 +17,16 @@ Features:
     - Parameter file support (.par format)
     - Output export and parameter persistence
     - Robust, rotating logging system (terminal + UTF-8 logs)
+    - FIXED: Zoom preservation when applying filters
 
-Enhanced in v2.2:
-    - New logger architecture with terminal and file logs
-    - Improved precision (hover shows 5 decimal places)
-    - Unicode-safe logging and console output
-    - Resampling improvements and configuration flexibility
+Enhanced in v2.2.1:
+    - Fixed zoom reset issue when applying filters
+    - Preserved user zoom/pan state during filter application
 
 Author: Timothy Wu  
 Created: 2025-07-03  
-Last Updated: 2025-07-28  
-Version: 2.2
+Last Updated: 2025-08-13  
+Version: 2.2.1
 
 Usage:
     python tts_freqfilt.py
@@ -125,7 +124,7 @@ def setup_logging():
                 msg = msg.replace('✗', '[X]')
                 msg = msg.replace('•', '*')
                 msg = msg.replace('↓', '[v]')
-                print(msg)
+                print(msg) 
     
     console_handler = SafeStreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
@@ -138,7 +137,7 @@ def setup_logging():
     
     # Log startup information
     logger.info("="*70)
-    logger.info("Temperature Time-Series Frequency Analysis & Filtering Tool v2.2")
+    logger.info("Temperature Time-Series Frequency Analysis & Filtering Tool v2.2.1")
     logger.info(f"Log directory: {log_dir}")
     logger.info(f"Detailed log: {detailed_log_file}")
     logger.info(f"Operations log: {operation_log_file}")
@@ -2388,6 +2387,7 @@ def update_raw_data_plot(data_status, filtered_relayout):
     return fig
 
 
+# FIXED: Filtered data plot callback with zoom preservation
 @app.callback(
     Output('filtered-data-plot', 'figure'),
     [Input('apply-filter-btn', 'n_clicks')],
@@ -2399,11 +2399,12 @@ def update_raw_data_plot(data_status, filtered_relayout):
      State('resample-interval', 'value'),  
      State('original-interval', 'value'),  
      State('trend-removal', 'value'),
-     State('data-store', 'children')]
+     State('data-store', 'children'),
+     State('filtered-data-plot', 'relayoutData')]  # FIXED: Added this to preserve zoom
 )
 def update_filtered_plot(n_clicks, f_low, f_high, filter_type, filter_order, 
                        ramp_fraction, resample_interval, original_interval, 
-                       trend_removal, data_status):
+                       trend_removal, data_status, current_layout):
     if data_status != "data-loaded" or analyzer.data is None:
         return go.Figure().add_annotation(text="Please upload data first", 
                                         xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
@@ -2448,9 +2449,17 @@ def update_filtered_plot(n_clicks, f_low, f_high, filter_type, filter_order,
         hovertemplate='Day: %{x:.5f}<br>Temperature: %{y:.5f}C<extra></extra>'
     ))
     
-    # Get x-axis range from the data
-    x_min = analyzer.filtered_data['WaterDay'].min()
-    x_max = analyzer.filtered_data['WaterDay'].max()
+    # FIXED: Preserve user's zoom level if available
+    if current_layout and 'xaxis.range[0]' in current_layout and 'xaxis.range[1]' in current_layout:
+        # User has zoomed/panned - preserve their view
+        xaxis_range = [current_layout['xaxis.range[0]'], current_layout['xaxis.range[1]']]
+        logger.debug(f"Preserving user zoom: {xaxis_range}")
+    else:
+        # No previous zoom - use full data range
+        x_min = analyzer.filtered_data['WaterDay'].min()
+        x_max = analyzer.filtered_data['WaterDay'].max()
+        xaxis_range = [x_min, x_max]
+        logger.debug(f"Using full range: {xaxis_range}")
     
     # Enhanced title with resampling info
     improvement = original_interval / resample_interval if resample_interval and resample_interval > 0 else 1
@@ -2466,7 +2475,7 @@ def update_filtered_plot(n_clicks, f_low, f_high, filter_type, filter_order,
         yaxis_title="Filtered Temperature (C)",
         hovermode='x unified',
         template='plotly_white',
-        xaxis=dict(range=[x_min, x_max])  # Set explicit range
+        xaxis=dict(range=xaxis_range)  # FIXED: Use preserved or default range
     )
     
     return fig
@@ -2679,7 +2688,7 @@ def update_method_specific_params(values, ids):
 
 if __name__ == '__main__':
     logger.info("="*70)
-    logger.info("Temperature Time-Series Frequency Analysis & Filtering Tool v2.2")
+    logger.info("Temperature Time-Series Frequency Analysis & Filtering Tool v2.2.1")
     logger.info("="*70)
     
     # Check for MNE availability
@@ -2772,6 +2781,11 @@ if __name__ == '__main__':
     else:
         logger.info(f"  [v] Downsampling configured: {1/improvement:.1f}:1")
     
+    logger.info("="*70)
+    logger.info("ZOOM PRESERVATION FIX APPLIED:")
+    logger.info("  - Apply Filter button now preserves your zoom level")
+    logger.info("  - No more automatic zoom reset when filtering")
+    logger.info("  - Enhanced user experience for detailed peak analysis")
     logger.info("="*70)
     logger.info("Starting web application...")
     logger.info("Open your browser to http://127.0.0.1:8051")
